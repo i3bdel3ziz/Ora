@@ -1,10 +1,9 @@
-# Monthly Hours — Shortage/Excess (GitHub Pages Ready)
+# Timesheet App (GitHub Pages)
+Static single-file React app for monthly shortage/excess hours.
 
-This is a ready-to-deploy repo for **GitHub Pages**.
+- Qatar weekend (Fri+Sat), working days Sun–Thu
+- Fixed 8h daily target
+- Quick shortage/exceed (+/-, HH:MM) and remaining-to-match
 
-## Deploy steps
-1. Create a new public repo on GitHub (e.g. `monthly-hours-app`).
-2. Upload the contents of this ZIP (index.html, README.md, .gitignore) to the repo root.
-3. Go to Settings → Pages → enable Pages from branch `main`, folder `/ (root)`.
-4. Your app will be live at: `https://<username>.github.io/<repo>/`.
-
+Preload a month:
+`/?year=2025&month=9`
