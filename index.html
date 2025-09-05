@@ -587,11 +587,7 @@
               <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
               <button onClick={exportPDF} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Export PDF</button>
               <button onClick={exportJSON} className="px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90">Backup JSON</button>
-              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
-                Restore JSON
-                <input id="restoreFile" type="file" accept="application/json" className="hidden"
-                  onchange="(function(el){ var f=el.files && el.files[0]; if(f){ var reader=new FileReader(); reader.onload=function(){ try{ var obj=JSON.parse(reader.result); if(obj && obj.store){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.store)); location.reload(); } }catch(e){ alert('Invalid JSON'); } }; reader.readAsText(f); el.value=''; } })(this)">
-              </label>
+              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">Restore JSON<input id="restoreFile" type="file" accept="application/json" className="hidden" onChange={function(e){ var f = e.target.files && e.target.files[0]; if(f){ var reader=new FileReader(); reader.onload=function(){ try{ var obj=JSON.parse(reader.result); if(obj && obj.store){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.store)); location.reload(); } }catch(err){ alert('Invalid JSON'); } }; reader.readAsText(f); e.target.value=''; } }} /></label>
               <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
                 Set Logo URL
                 <input type="url" className="hidden" onChange={function(e){ applyLogo(e.target.value); }} />
