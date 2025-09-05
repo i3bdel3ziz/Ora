@@ -3,10 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Timesheet — Monthly Hours (V1.5)</title>
-  <meta name="description" content="Timesheet: Sun–Thu workweek (Fri+Sat weekend), fixed 8h/day, CSV/PDF export, trend chart, progress ring." />
+  <title>Timesheet — Monthly Hours (V1.6)</title>
+  <meta name="description" content="Timesheet: Sun–Thu workweek (Fri+Sat weekend), fixed 8h/day, one long day at 9.5h, CSV/PDF export, trend chart, progress ring." />
   <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
-  <!-- Tailwind CDN (OK for GH Pages; can precompile later) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>noscript{display:block;padding:1rem;background:#fee2e2;color:#7f1d1d;margin:1rem;border-radius:.5rem}</style>
 </head>
@@ -17,7 +16,7 @@
   <!-- React + ReactDOM (production UMD) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel for in-browser JSX (OK for GH Pages) -->
+  <!-- Babel for in-browser JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel" data-presets="react">
@@ -29,7 +28,7 @@
     function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
     const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const STORAGE_KEY = 'timesheet-v1.5';
+    const STORAGE_KEY = 'timesheet-v1.6';
 
     function TrendChart({ data, target }){
       const width = Math.max(260, data.length*14 + 40);
@@ -79,6 +78,10 @@
       const dailyTarget = 8; // fixed
       const weekendDays = new Set([5,6]); // Fri + Sat
 
+      // NEW: Long day state (Sun..Thu = 0..4) and value
+      const [longDay, setLongDay] = useState(0);
+      const longHours = 9.5;
+
       // Load & Save
       useEffect(()=>{
         try{
@@ -88,12 +91,13 @@
             if(typeof p.year==='number') setYear(p.year);
             if(typeof p.month==='number') setMonth(p.month);
             setHoursByDay(p.hoursByDay || {});
+            if(typeof p.longDay==='number') setLongDay(p.longDay);
           }
         }catch{}
       },[]);
       useEffect(()=>{
-        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({year, month, hoursByDay})); }catch{}
-      },[year, month, hoursByDay]);
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({year, month, hoursByDay, longDay})); }catch{}
+      },[year, month, hoursByDay, longDay]);
 
       const totalDays = daysInMonth(year, month);
       const isWeekend = (wd)=> weekendDays.has(wd);
@@ -116,7 +120,7 @@
       },[year, month, totalDays]);
 
       const workingDays = useMemo(()=> rows.flat().filter(Boolean).length, [rows]);
-      const targetMonthlyHours = workingDays * dailyTarget;
+      const targetMonthlyHours = workingDays * dailyTarget; // target stays 8h per working day
       const actualMonthlyHours = useMemo(()=> Object.values(hoursByDay).reduce((s,v)=> s + (Number(v)||0), 0), [hoursByDay]);
       const diff = actualMonthlyHours - targetMonthlyHours;
       const monthLabel = useMemo(()=> new Date(year,month,1).toLocaleDateString(undefined, {month:'long', year:'numeric'}), [year,month]);
@@ -175,7 +179,15 @@
       }
 
       // Bulk helpers
-      function fillAllWorking(){ const next={...hoursByDay}; rows.forEach(row=>row.forEach(d=>{ if(d) next[d]=dailyTarget; })); setHoursByDay(next); }
+      function fillAllWorking(){
+        const next = { ...hoursByDay };
+        rows.forEach(row => row.forEach(d => {
+          if (!d) return;
+          const wd = new Date(year, month, d).getDay(); // 0..6
+          next[d] = (wd === longDay) ? longHours : dailyTarget;
+        }));
+        setHoursByDay(next);
+      }
       function clearAll(){ setHoursByDay({}); }
 
       // Chart data
@@ -194,10 +206,24 @@
               <div className="flex items-center gap-2">
                 <button onClick={goPrevMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">◀</button>
                 <h1 className="text-2xl font-bold min-w-[220px] text-center">{monthLabel}</h1>
-                <span className="ml-2 inline-block px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">v1.5</span>
+                <span className="ml-2 inline-block px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">v1.6</span>
                 <button onClick={goNextMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">▶</button>
               </div>
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex flex-wrap gap-3 items-center">
+                <label className="text-sm flex items-center gap-2">
+                  <span>Long day</span>
+                  <select
+                    value={longDay}
+                    onChange={(e)=>setLongDay(Number(e.target.value))}
+                    className="rounded-lg border px-3 py-2 bg-white"
+                  >
+                    {[0,1,2,3,4].map(i => (
+                      <option key={i} value={i}>{WEEKDAYS[i]}</option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-gray-500">(9.5 h)</span>
+                </label>
+
                 <button onClick={resetToCurrent} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Reset</button>
                 <button onClick={fillAllWorking} className="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
                 <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
@@ -286,7 +312,7 @@
             </div>
 
             <footer className="text-xs text-gray-500 mt-6 text-center space-y-1">
-              <div>V1.5 - Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</div>
+              <div>V1.6 - Fixed Qatar weekend (Fri+Sat). 8h daily target with one long day at 9.5h. Data stays in your browser.</div>
               <div>Built by <a href="https://github.com/i3bdel3ziz/Timesheet_App" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-600">i3bdel3ziz</a></div>
             </footer>
           </div>
