@@ -1,6 +1,3 @@
-# Timesheet App — V1.7.6 (Targeted fragment wrap)
+# Timesheet App — V1.7.6 (Full Restore)
 
-- Fixes "Adjacent JSX elements" by wrapping only App()'s return in a fragment.
-- Avoids touching other returns like fmt().
-
-Deploy with ?_v=1.7.6 after upload.
+Full feature set restored with no JSX comments and single-root return.
