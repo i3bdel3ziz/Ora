@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Timesheet — Monthly Hours (V1.4.3)</title>
-  <meta name="description" content="Timesheet: Sun–Thu workweek (Fri+Sat weekend), fixed 8h/day target, CSV/PDF export, trend chart, progress ring." />
+  <title>Timesheet — Monthly Hours (V1.5)</title>
+  <meta name="description" content="Timesheet: Sun–Thu workweek (Fri+Sat weekend), fixed 8h/day, CSV/PDF export, trend chart, progress ring." />
   <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
-  <!-- Tailwind CDN (warning about production is safe to ignore for GitHub Pages) -->
+  <!-- Tailwind CDN (OK for GH Pages; can precompile later) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>noscript{display:block;padding:1rem;background:#fee2e2;color:#7f1d1d;margin:1rem;border-radius:.5rem}</style>
 </head>
@@ -17,7 +17,7 @@
   <!-- React + ReactDOM (production UMD) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel for in-browser JSX (OK for GH Pages; we can precompile later) -->
+  <!-- Babel for in-browser JSX (OK for GH Pages) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel" data-presets="react">
@@ -29,7 +29,7 @@
     function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
     const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const STORAGE_KEY = 'timesheet-v1.4.3';
+    const STORAGE_KEY = 'timesheet-v1.5';
 
     function TrendChart({ data, target }){
       const width = Math.max(260, data.length*14 + 40);
@@ -44,7 +44,6 @@
 
       return (
         <svg viewBox={"0 0 " + width + " " + height} className="w-full h-28">
-          <rect x="0" y="0" width={width} height={height} className="fill-transparent" />
           <line x1={padL} y1={ty} x2={width-padR} y2={ty} className="stroke-gray-400" strokeDasharray="4 3" />
           {data.map((d, idx)=>{
             const x = padL + step*idx + (step-barW)/2;
@@ -145,13 +144,13 @@
           const v = hoursByDay[d] ?? '';
           lines.push(`${d},${wk},${v}`);
         }
-        const blob = new Blob([lines.join('\\n')], { type:'text/csv;charset=utf-8;' });
+        const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = `timesheet_${year}_${String(month+1).padStart(2,'0')}.csv`;
         document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }
 
-      // PDF Export (print window) - IMPORTANT: do not include the literal closing tag for the outer script
+      // PDF Export - avoid literal closing tag for the outer script
       function exportPDF(){
         const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
         const style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}';
@@ -167,8 +166,7 @@
           + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
           + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
           + '</tbody></table>';
-        // Build a print script without ever writing the exact closing tag for the outer script
-        const printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\\/scr' + 'ipt>';
+        const printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\/scr' + 'ipt>';
         const html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
           + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
           + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
@@ -196,19 +194,10 @@
               <div className="flex items-center gap-2">
                 <button onClick={goPrevMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">◀</button>
                 <h1 className="text-2xl font-bold min-w-[220px] text-center">{monthLabel}</h1>
+                <span className="ml-2 inline-block px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">v1.5</span>
                 <button onClick={goNextMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">▶</button>
               </div>
               <div className="flex flex-wrap gap-2 items-center">
-                <label className="text-sm flex items-center gap-2">
-                  <span>Month</span>
-                  <select value={month} onChange={(e)=>setMonth(Number(e.target.value))} className="rounded-lg border px-3 py-2 bg-white">
-                    {Array.from({length:12}).map((_,i)=>(<option key={i} value={i}>{new Date(2020,i,1).toLocaleString(undefined,{month:'long'})}</option>))}
-                  </select>
-                </label>
-                <label className="text-sm flex items-center gap-2">
-                  <span>Year</span>
-                  <input type="number" value={year} onChange={(e)=>setYear(Number(e.target.value))} className="rounded-lg border px-3 py-2 w-28 bg-white" />
-                </label>
                 <button onClick={resetToCurrent} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Reset</button>
                 <button onClick={fillAllWorking} className="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
                 <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
@@ -296,7 +285,10 @@
               </div>
             </div>
 
-            <footer className="text-xs text-gray-500 mt-6 text-center">V1.4.3 - Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</footer>
+            <footer className="text-xs text-gray-500 mt-6 text-center space-y-1">
+              <div>V1.5 - Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</div>
+              <div>Built by <a href="https://github.com/i3bdel3ziz/Timesheet_App" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-600">i3bdel3ziz</a></div>
+            </footer>
           </div>
         </div>
       );
