@@ -3,17 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Timesheet — Monthly Hours (Qatar: Fri+Sat weekend)</title>
-  <script>
-    // Tailwind config for class-based dark mode
-    window.tailwind = window.tailwind || {};
-    tailwind.config = { darkMode: 'class' };
-  </script>
+  <title>Timesheet — Monthly Hours (V1.4)</title>
+  <meta name="description" content="Timesheet V1.4: Sun–Thu working week (Fri+Sat weekend), fixed 8h/day target, CSV/PDF export, trend chart, progress ring." />
   <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="description" content="Simple timesheet: Sun–Thu working days, 8h target, shortage/exceed, weekly subtotals, CSV import/export, dark mode." />
   <style>noscript{display:block;padding:1rem;background:#fee2e2;color:#7f1d1d;margin:1rem;border-radius:.5rem}</style>
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+<body class="bg-gray-50 text-gray-900">
   <noscript>This app requires JavaScript. Please enable it and reload.</noscript>
   <div id="root"></div>
 
@@ -23,273 +18,266 @@
   <!-- Babel for in-browser JSX transform -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- IMPORTANT: data-presets ensures JSX compiles on GitHub Pages -->
   <script type="text/babel" data-presets="react">
-    const { useEffect, useMemo, useRef, useState } = React;
+    const { useEffect, useMemo, useState } = React;
 
-    // ────────────────────────────────────────────────────────────────────────────
     // Utilities
     function daysInMonth(year, monthIndex0) { return new Date(year, monthIndex0 + 1, 0).getDate(); }
     function fmt(n) { return (Math.round(n * 100) / 100).toFixed(2); }
-    function parseHours(text) {
-      const s = (typeof text === 'string' ? text : '').trim();
-      if (s === '') return NaN;
-      if (s.includes(':')) {
-        let t = s;
-        const sign = t.startsWith('-') ? -1 : 1;
-        if (t.startsWith('-') || t.startsWith('+')) t = t.slice(1);
-        const parts = t.split(':');
-        if (parts.length !== 2) return NaN;
-        const h = Number(parts[0]);
-        const m = Number(parts[1]);
-        if (!isFinite(h) || !isFinite(m) || m < 0 || m >= 60) return NaN;
-        return sign * (h + m / 60);
-      }
-      const num = Number(s.replace(',', '.'));
-      return isFinite(num) ? num : NaN;
+    function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+    const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const STORAGE_KEY = 'timesheet-v1.4';
+
+    function TrendChart({ data, target }){
+      const width = Math.max(260, data.length*14 + 40);
+      const height = 120;
+      const padL = 28, padB = 18, padT = 10, padR = 10;
+      const innerW = width - padL - padR;
+      const innerH = height - padT - padB;
+      const maxY = Math.max(target*1.1, ...data.map(d=>d.hours))*1.1 || target || 8;
+      const barW = Math.max(6, innerW / Math.max(1,data.length) * 0.7);
+      const step = innerW / Math.max(1,data.length);
+      const ty = height - padB - innerH * clamp(target/maxY, 0, 1);
+
+      return (
+        <svg viewBox={"0 0 " + width + " " + height} className="w-full h-28">
+          <rect x="0" y="0" width={width} height={height} className="fill-transparent" />
+          <line x1={padL} y1={ty} x2={width-padR} y2={ty} className="stroke-gray-400" strokeDasharray="4 3" />
+          {data.map((d, idx)=>{
+            const x = padL + step*idx + (step-barW)/2;
+            const h = innerH * clamp(d.hours/maxY, 0, 1);
+            const y = height - padB - h;
+            const over = d.hours >= target;
+            return <rect key={idx} x={x} y={y} width={barW} height={h} rx="2" className={over? 'fill-green-600':'fill-amber-600'} />;
+          })}
+        </svg>
+      );
     }
 
-    const STORAGE_KEY = 'hours-calculator-pages-v5';
-    const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const WORKING_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu']; // Qatar working week
-
-    // Dark mode (class on <html>)
-    function useDarkMode() {
-      const [dark, setDark] = useState(() => {
-        try { return localStorage.getItem('hours-dark') === '1'; } catch { return false; }
-      });
-      useEffect(() => {
-        try { localStorage.setItem('hours-dark', dark ? '1' : '0'); } catch {}
-        document.documentElement.classList.toggle('dark', dark);
-      }, [dark]);
-      return { dark, setDark };
+    function ProgressRing({ actual, target }){
+      const pct = target>0 ? clamp(actual/target,0,1) : 0;
+      const size=120, stroke=12, r=(size-stroke)/2, c=2*Math.PI*r;
+      const dash = c*pct;
+      return (
+        <svg viewBox={"0 0 " + size + " " + size} className="w-28 h-28">
+          <circle cx={size/2} cy={size/2} r={r} strokeWidth={stroke} className="fill-none stroke-gray-200"/>
+          <circle cx={size/2} cy={size/2} r={r} strokeWidth={stroke} className="fill-none stroke-indigo-600" strokeLinecap="round"
+            strokeDasharray={dash + " " + (c-dash)} transform={"rotate(-90 " + (size/2) + " " + (size/2) + ")"} />
+          <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="fill-current text-sm">{Math.round(pct*100)}%</text>
+        </svg>
+      );
     }
 
-    // ────────────────────────────────────────────────────────────────────────────
-    function App() {
+    function App(){
       const today = new Date();
       const [year, setYear] = useState(today.getFullYear());
       const [month, setMonth] = useState(today.getMonth()); // 0..11
       const [hoursByDay, setHoursByDay] = useState({}); // { dayNumber: number }
-      const { dark, setDark } = useDarkMode();
-      const inputRefs = useRef({}); // day -> input
 
-      // Load saved state
-      useEffect(() => {
-        try {
+      const dailyTarget = 8; // fixed
+      const weekendDays = new Set([5,6]); // Fri(5)+Sat(6)
+
+      // Load & Save
+      useEffect(()=>{
+        try{
           const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw) {
+          if(raw){
             const p = JSON.parse(raw);
-            setYear(typeof p.year === 'number' ? p.year : year);
-            setMonth(typeof p.month === 'number' ? p.month : month);
-            setHoursByDay(p.hoursByDay ?? {});
+            if(typeof p.year==='number') setYear(p.year);
+            if(typeof p.month==='number') setMonth(p.month);
+            setHoursByDay(p.hoursByDay || {});
           }
-        } catch {}
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, []);
-      // Persist
-      useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ year, month, hoursByDay })); } catch {}
-      }, [year, month, hoursByDay]);
+        }catch{}
+      },[]);
+      useEffect(()=>{
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({year, month, hoursByDay})); }catch{}
+      },[year, month, hoursByDay]);
 
       const totalDays = daysInMonth(year, month);
+      const isWeekend = (wd)=> weekendDays.has(wd);
 
-      // Build rows of Sun..Thu cells, skipping Fri/Sat entirely
-      const rows = useMemo(() => {
-        const out = [];
-        let current = [null, null, null, null, null];
-        for (let d = 1; d <= totalDays; d++) {
-          const wd = new Date(year, month, d).getDay(); // 0..6
-          if (wd === 5 || wd === 6) continue; // skip Fri & Sat
-          const col = wd === 0 ? 0 : wd; // Sun=0 .. Thu=4
-          if (col === 0 && current.some(c => c !== null)) { out.push(current); current = [null, null, null, null, null]; }
-          current[col] = d;
-          if (col === 4) { out.push(current); current = [null, null, null, null, null]; }
+      // Build Sun–Thu grid rows
+      const rows = useMemo(()=>{
+        const out=[]; let current=[null,null,null,null,null,null,null];
+        for(let d=1; d<=totalDays; d++){
+          const wd = new Date(year, month, d).getDay();
+          if(isWeekend(wd)) continue;
+          if(wd===0 && current.some(c=>c!==null)){ out.push(current); current=[null,null,null,null,null,null,null]; }
+          current[wd] = d;
+          const nextDate = new Date(year, month, d+1);
+          const nextIsNewWeek = nextDate.getDay()===0 || d===totalDays;
+          if(nextIsNewWeek){ out.push(current); current=[null,null,null,null,null,null,null]; }
         }
-        if (current.some(c => c !== null)) out.push(current);
-        return out;
-      }, [year, month, totalDays]);
+        if(current.some(c=>c!==null)) out.push(current);
+        const workCols = [0,1,2,3,4,5,6].filter(wd=>!isWeekend(wd));
+        return out.map(row => workCols.map(wd => row[wd] ?? null));
+      },[year, month, totalDays]);
 
-      const workingDays = useMemo(() => rows.flat().filter(Boolean).length, [rows]);
-      const targetMonthlyHours = workingDays * 8;
-      const actualMonthlyHours = useMemo(() => Object.values(hoursByDay).reduce((s, v) => s + (Number(v) || 0), 0), [hoursByDay]);
+      const workingDays = useMemo(()=> rows.flat().filter(Boolean).length, [rows]);
+      const targetMonthlyHours = workingDays * dailyTarget;
+      const actualMonthlyHours = useMemo(()=> Object.values(hoursByDay).reduce((s,v)=> s + (Number(v)||0), 0), [hoursByDay]);
       const diff = actualMonthlyHours - targetMonthlyHours;
-      const monthLabel = useMemo(() => new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), [year, month]);
+      const monthLabel = useMemo(()=> new Date(year,month,1).toLocaleDateString(undefined, {month:'long', year:'numeric'}), [year,month]);
 
-      const isToday = (d) => today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+      const isToday = (d)=> today.getFullYear()===year && today.getMonth()===month && today.getDate()===d;
       const getDayClass = (d) => {
         const v = hoursByDay[d];
         if (typeof v !== 'number') return '';
-        if (v > 8) return 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-200'; // overtime
-        if (v < 8) return 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200'; // shortage
+        if (v > dailyTarget) return 'bg-green-50 text-green-800';
+        if (v < dailyTarget) return 'bg-amber-50 text-amber-800';
         return '';
       };
 
-      // Keyboard navigation
-      const focusableDays = useMemo(() => rows.flat().filter(Boolean), [rows]);
-      const focusDay = (day) => { if (day != null && inputRefs.current[day]) inputRefs.current[day].focus(); };
-      const handleKeyNav = (e, day, colIndex, rowIndex) => {
-        const key = e.key;
-        if (["Enter", "ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Tab"].includes(key)) {
-          e.preventDefault();
-        }
-        const flatIndex = focusableDays.indexOf(day);
-        if (key === 'Enter' || key === 'ArrowRight' || (key === 'Tab' && !e.shiftKey)) {
-          focusDay(focusableDays[flatIndex + 1]);
-        } else if (key === 'ArrowLeft' || (key === 'Tab' && e.shiftKey)) {
-          focusDay(focusableDays[flatIndex - 1]);
-        } else if (key === 'ArrowDown') {
-          const nextRow = rows[rowIndex + 1];
-          const nextDay = nextRow ? (nextRow[colIndex] ?? undefined) : undefined;
-          focusDay(nextDay);
-        } else if (key === 'ArrowUp') {
-          const prevRow = rows[rowIndex - 1];
-          const prevDay = prevRow ? (prevRow[colIndex] ?? undefined) : undefined;
-          focusDay(prevDay);
-        }
-      };
+      function goPrevMonth(){ const m=month-1; if(m<0){ setMonth(11); setYear(y=>y-1);} else setMonth(m); }
+      function goNextMonth(){ const m=month+1; if(m>11){ setMonth(0); setYear(y=>y+1);} else setMonth(m); }
+      function resetToCurrent(){ const n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }
 
-      // CSV Export/Import
-      function exportCSV() {
-        const lines = [];
-        lines.push('# Timesheet Export');
-        lines.push('# Month,Year');
-        lines.push(`${month + 1},${year}`);
-        lines.push('day,weekday,hours');
-        focusableDays.forEach(d => {
+      // CSV Export
+      function exportCSV(){
+        const lines = ["day,weekday,hours"];
+        for(let d=1; d<=totalDays; d++){
           const wd = new Date(year, month, d).getDay();
+          if(isWeekend(wd)) continue;
           const wk = WEEKDAYS[wd];
           const v = hoursByDay[d] ?? '';
           lines.push(`${d},${wk},${v}`);
-        });
-        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `timesheet_${year}_${String(month + 1).padStart(2, '0')}.csv`;
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
-      }
-      function importCSV(text) {
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
-        let m = month, y = year;
-        const next = { ...hoursByDay };
-        for (const line of lines) {
-          if (line.startsWith('#')) continue;
-          const parts = line.split(',').map(s => s.trim());
-          if (parts.length === 2 && /(\d{1,2})/.test(parts[0]) && /(\d{4})/.test(parts[1])) {
-            const mm = Number(parts[0]); const yy = Number(parts[1]);
-            if (mm >= 1 && mm <= 12) m = mm - 1; if (yy >= 1970 && yy <= 3000) y = yy; continue;
-          }
-          if (parts.length >= 2 && /(\d{1,2})/.test(parts[0])) {
-            const d = Number(parts[0]);
-            const vStr = parts[2] ?? parts[1];
-            const v = parseHours(vStr);
-            if (Number.isFinite(v)) next[d] = v;
-          }
         }
-        setYear(y); setMonth(m); setHoursByDay(next);
+        const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `timesheet_${year}_${String(month+1).padStart(2,'0')}.csv`;
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }
-      const fileInputRef = useRef(null);
 
-      function setAllWeekdaysToTarget() {
-        const next = { ...hoursByDay };
-        focusableDays.forEach(d => { next[d] = 8; });
-        setHoursByDay(next);
+      // PDF Export (print window)
+      function exportPDF(){
+        const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
+        const style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}';
+        const monthName = new Date(year,month,1).toLocaleDateString(undefined,{month:'long', year:'numeric'});
+        let rowsHtml = '';
+        for(let d=1; d<=totalDays; d++){
+          const wd = new Date(year,month,d).getDay(); if(isWeekend(wd)) continue;
+          const wk = WEEKDAYS[wd]; const v = hoursByDay[d] ?? '';
+          rowsHtml += '<tr><td>'+wk+' '+d+'</td><td>'+(v!==''?Number(v).toFixed(2):'')+'</td></tr>';
+        }
+        const summary = '<table><thead><tr><th>Metric</th><th>Value (h)</th></tr></thead><tbody>'
+          + '<tr><td>Target hours</td><td>'+ (targetMonthlyHours).toFixed(2) +'</td></tr>'
+          + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
+          + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
+          + '</tbody></table>';
+        const html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
+          + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
+          + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+          + '<script>window.onload=()=>window.print()</script></body></html>';
+        w.document.open(); w.document.write(html); w.document.close();
       }
-      function clearAll() { setHoursByDay({}); }
-      function resetToCurrentMonth() { const now = new Date(); setYear(now.getFullYear()); setMonth(now.getMonth()); }
+
+      // Bulk helpers
+      function fillAllWorking(){ const next={...hoursByDay}; rows.forEach(row=>row.forEach(d=>{ if(d) next[d]=dailyTarget; })); setHoursByDay(next); }
+      function clearAll(){ setHoursByDay({}); }
+
+      // Chart data
+      const chartData = useMemo(()=>{
+        const d=[];
+        rows.forEach(row=> row.forEach(dayNum=> { if(dayNum) d.push({day: dayNum, hours: Number(hoursByDay[dayNum])||0}); }));
+        d.sort((a,b)=>a.day-b.day);
+        return d;
+      },[rows, hoursByDay]);
 
       return (
         <div className="min-h-screen w-full">
-          <div className="max-w-5xl mx-auto p-6">
-            {/* Header & Controls */}
+          <div className="max-w-6xl mx-auto p-6">
+            {/* Header */}
             <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <h1 className="text-2xl font-bold">Timesheet — {monthLabel} {diff >= 0 ? '🎉' : '⚠️'}</h1>
+              <div className="flex items-center gap-2">
+                <button onClick={goPrevMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">◀</button>
+                <h1 className="text-2xl font-bold min-w-[220px] text-center">{monthLabel}</h1>
+                <button onClick={goNextMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">▶</button>
+              </div>
               <div className="flex flex-wrap gap-2 items-center">
                 <label className="text-sm flex items-center gap-2">
                   <span>Month</span>
-                  <select className="rounded-lg border px-3 py-2 bg-white dark:bg-gray-800" value={month} onChange={e=>setMonth(Number(e.target.value))}>
-                    {Array.from({length:12}).map((_,i)=>(
-                      <option key={i} value={i}>{new Date(2020,i,1).toLocaleString(undefined,{month:'long'})}</option>
-                    ))}
+                  <select value={month} onChange={(e)=>setMonth(Number(e.target.value))} className="rounded-lg border px-3 py-2 bg-white">
+                    {Array.from({length:12}).map((_,i)=>(<option key={i} value={i}>{new Date(2020,i,1).toLocaleString(undefined,{month:'long'})}</option>))}
                   </select>
                 </label>
                 <label className="text-sm flex items-center gap-2">
                   <span>Year</span>
-                  <input type="number" className="rounded-lg border px-3 py-2 w-28 bg-white dark:bg-gray-800" value={year} onChange={e=>setYear(Number(e.target.value))} />
+                  <input type="number" value={year} onChange={(e)=>setYear(Number(e.target.value))} className="rounded-lg border px-3 py-2 w-28 bg-white" />
                 </label>
-                <button onClick={resetToCurrentMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">Reset to current</button>
-                <button onClick={setAllWeekdaysToTarget} className="px-3 py-2 rounded-xl bg-gray-900 text-white shadow hover:opacity-90">Fill all</button>
-                <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">Clear all</button>
-                <button onClick={() => fileInputRef.current?.click()} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Import CSV</button>
-                <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={async (e)=>{
-                  const file = e.target.files?.[0]; if (!file) return; const txt = await file.text(); importCSV(txt); e.currentTarget.value = '';
-                }} />
+                <button onClick={resetToCurrent} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Reset</button>
+                <button onClick={fillAllWorking} className="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
+                <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
                 <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
-                <button onClick={()=>setDark(!dark)} className="px-3 py-2 rounded-xl bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900">{dark ? '☀️ Light' : '🌙 Dark'}</button>
+                <button onClick={exportPDF} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Export PDF</button>
               </div>
             </header>
 
-            {/* Summary cards */}
+            {/* Summary */}
             <div className="grid sm:grid-cols-3 gap-3 mb-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3">
-                <div className="text-gray-600 dark:text-gray-300 text-sm">Target hours</div>
+              <div className="bg-white rounded-xl p-3">
+                <div className="text-sm text-gray-600">Target hours</div>
                 <div className="text-xl font-bold">{fmt(targetMonthlyHours)}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Working days (Sun–Thu): {workingDays} × 8 h</div>
+                <div className="text-xs text-gray-500 mt-1">Working days: {workingDays} × {fmt(dailyTarget)} h</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3">
-                <div className="text-gray-600 dark:text-gray-300 text-sm">Actual hours</div>
+              <div className="bg-white rounded-xl p-3">
+                <div className="text-sm text-gray-600">Actual hours</div>
                 <div className="text-xl font-bold">{fmt(actualMonthlyHours)}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Sum of daily entries</div>
+                <div className="text-xs text-gray-500 mt-1">Sum of daily entries</div>
               </div>
-              <div className={`rounded-xl p-3 ${diff>=0? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-200':'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'}`}>
-                <div className="text-sm font-semibold">{diff>=0? 'Exceed by':'Shortage of'}</div>
-                <div className="text-xl font-bold">{fmt(Math.abs(diff))} h</div>
+              <div className={(diff>=0? 'bg-green-50 text-green-700':'bg-amber-50 text-amber-700') + ' rounded-xl p-3'}>
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0"><ProgressRing actual={actualMonthlyHours} target={targetMonthlyHours} /></div>
+                  <div>
+                    <div className="text-sm font-semibold">{diff>=0? 'Exceed by':'Shortage of'}</div>
+                    <div className="text-xl font-bold">{fmt(Math.abs(diff))} h</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Daily grid */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
+            {/* Chart */}
+            <div className="bg-white rounded-2xl shadow p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold">Trend — Daily hours (Sun–Thu)</h3>
+                <div className="text-xs text-gray-500">Dashed line = 8h target</div>
+              </div>
+              <TrendChart data={chartData} target={dailyTarget} />
+            </div>
+
+            {/* Day grid */}
+            <div className="bg-white rounded-2xl shadow p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">Daily entries (Sun–Thu)</h3>
-                <div className="text-xs text-gray-500 dark:text-gray-300">Use Enter/Arrows to move. Today is highlighted.</div>
-              </div>
-
-              {/* Weekday headers (hidden on very small screens) */}
-              <div className="hidden sm:grid grid-cols-5 gap-2 text-sm mb-1">
-                {WORKING_WEEK.map((wd) => (
-                  <div key={wd} className="text-center font-medium text-gray-600 dark:text-gray-300">{wd}</div>
-                ))}
+                <div className="text-xs text-gray-500">Friday & Saturday excluded</div>
               </div>
 
               <div className="grid gap-3">
                 {rows.map((row, ri) => {
                   const weekSum = row.reduce((s, d) => s + (d ? (Number(hoursByDay[d])||0) : 0), 0);
                   return (
-                    <div key={`row${ri}`} className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                    <div key={'row'+ri} className="grid gap-2" style={{gridTemplateColumns: 'repeat(' + row.length + ', minmax(0,1fr))'}}>
                       {row.map((dayNum, j) => (
-                        <div key={`r${ri}c${j}`} className={`rounded-xl border p-2 ${dayNum && isToday(dayNum) ? 'ring-2 ring-blue-400' : ''} ${dayNum ? getDayClass(dayNum) : ''}`}>
+                        <div key={'c'+j} className={'rounded-xl border p-2 ' + (dayNum && isToday(dayNum) ? 'ring-2 ring-blue-400 ' : '') + (dayNum ? getDayClass(dayNum) : '')}>
                           {dayNum ? (
                             <>
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs text-gray-500 dark:text-gray-300">{WORKING_WEEK[j]} {dayNum}</span>
+                                <span className="text-xs text-gray-500">{WEEKDAYS.filter((_,i)=>!weekendDays.has(i))[j]} {dayNum}</span>
                               </div>
                               <input
-                                ref={el => { if (dayNum != null) inputRefs.current[dayNum] = el; }}
                                 type="number"
-                                step={0.25}
-                                min={0}
-                                className="w-full rounded-lg border px-2 py-1 bg-white dark:bg-gray-600"
+                                step="0.25"
+                                min="0"
+                                className="w-full rounded-lg border px-2 py-1"
                                 value={hoursByDay[dayNum] ?? ''}
                                 onChange={(e) => {
                                   const v = e.target.value === '' ? NaN : Number(e.target.value);
-                                  setHoursByDay(prev => {
+                                  setHoursByDay((prev) => {
                                     const next = { ...prev };
                                     if (Number.isNaN(v)) delete next[dayNum]; else next[dayNum] = v;
                                     return next;
                                   });
                                 }}
-                                onKeyDown={(e)=> handleKeyNav(e, dayNum, j, ri)}
                               />
                             </>
                           ) : (
@@ -297,22 +285,14 @@
                           )}
                         </div>
                       ))}
-                      {/* Weekly subtotal */}
-                      <div className="sm:col-span-5 col-span-1 -mt-1 text-right text-sm text-gray-700 dark:text-gray-200">
-                        <span className="inline-block rounded-lg px-2 py-1 bg-gray-100 dark:bg-gray-700">Week subtotal: <b>{fmt(weekSum)}</b> h</span>
-                      </div>
+                      <div className="col-span-full -mt-1 text-right text-sm text-gray-700"><span className="inline-block rounded-lg px-2 py-1 bg-gray-100">Week subtotal: <b>{fmt(weekSum)}</b> h</span></div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Running total */}
-              <div className="mt-4 text-right text-sm text-gray-700 dark:text-gray-200">
-                <span className="inline-block rounded-lg px-2 py-1 bg-gray-100 dark:bg-gray-700">Running total: <b>{fmt(actualMonthlyHours)}</b> h</span>
-              </div>
             </div>
 
-            <footer className="text-xs text-gray-500 mt-6 text-center">Data stays in your browser. Qatar weekend (Fri+Sat). Daily target fixed at 8 hours.</footer>
+            <footer className="text-xs text-gray-500 mt-6 text-center">V1.4 · Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</footer>
           </div>
         </div>
       );
