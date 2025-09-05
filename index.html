@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Timesheet — Monthly Hours (V1.4)</title>
-  <meta name="description" content="Timesheet V1.4: Sun–Thu working week (Fri+Sat weekend), fixed 8h/day target, CSV/PDF export, trend chart, progress ring." />
+  <title>Timesheet — Monthly Hours (V1.4.2)</title>
+  <meta name="description" content="Timesheet: Sun–Thu workweek (Fri+Sat weekend), fixed 8h/day target, CSV/PDF export, trend chart, progress ring." />
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+  <!-- Tailwind CDN (warning about production is safe to ignore for GitHub Pages) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>noscript{display:block;padding:1rem;background:#fee2e2;color:#7f1d1d;margin:1rem;border-radius:.5rem}</style>
 </head>
@@ -15,7 +17,7 @@
   <!-- React + ReactDOM (production UMD) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel for in-browser JSX transform -->
+  <!-- Babel for in-browser JSX (OK for GH Pages; we can precompile later) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel" data-presets="react">
@@ -27,7 +29,7 @@
     function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
     const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const STORAGE_KEY = 'timesheet-v1.4';
+    const STORAGE_KEY = 'timesheet-v1.4.2';
 
     function TrendChart({ data, target }){
       const width = Math.max(260, data.length*14 + 40);
@@ -76,7 +78,7 @@
       const [hoursByDay, setHoursByDay] = useState({}); // { dayNumber: number }
 
       const dailyTarget = 8; // fixed
-      const weekendDays = new Set([5,6]); // Fri(5)+Sat(6)
+      const weekendDays = new Set([5,6]); // Fri + Sat
 
       // Load & Save
       useEffect(()=>{
@@ -97,7 +99,7 @@
       const totalDays = daysInMonth(year, month);
       const isWeekend = (wd)=> weekendDays.has(wd);
 
-      // Build Sun–Thu grid rows
+      // Build Sun-Thu grid rows
       const rows = useMemo(()=>{
         const out=[]; let current=[null,null,null,null,null,null,null];
         for(let d=1; d<=totalDays; d++){
@@ -143,13 +145,13 @@
           const v = hoursByDay[d] ?? '';
           lines.push(`${d},${wk},${v}`);
         }
-        const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
+        const blob = new Blob([lines.join('\\n')], { type:'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = `timesheet_${year}_${String(month+1).padStart(2,'0')}.csv`;
         document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }
 
-      // PDF Export (print window) — IMPORTANT: escape </script> inside HTML string
+      // PDF Export (print window) - IMPORTANT: escape </script> inside HTML string
       function exportPDF(){
         const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
         const style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}';
@@ -165,8 +167,8 @@
           + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
           + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
           + '</tbody></table>';
-        // Escape the closing script tag to avoid terminating the outer <script> block
-        const printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\/scr' + 'ipt>';
+        // Escape the closing script tag to avoid ending the outer <script> block
+        const printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\\/scr' + 'ipt>';
         const html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
           + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
           + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
@@ -294,7 +296,7 @@
               </div>
             </div>
 
-            <footer className="text-xs text-gray-500 mt-6 text-center">V1.4 · Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</footer>
+            <footer className="text-xs text-gray-500 mt-6 text-center">V1.4.2 - Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</footer>
           </div>
         </div>
       );
