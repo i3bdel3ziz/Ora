@@ -1,1 +1,646 @@
-<!doctype html><title>placeholder</title>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Timesheet — Monthly Hours (V1.8)</title>
+  <meta name="description" content="Timesheet V1.8: Sun–Thu week (Fri+Sat weekend), configurable target, holiday toggle, long day 9.5h, comparison & cumulative charts, heatmap, notes, alerts, API shim, white-label, AI-ish Q&A & insights." />
+  <link rel="icon" href="favicon.ico" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    noscript{display:block;padding:1rem;background:#fee2e2;color:#7f1d1d;margin:1rem;border-radius:.5rem}
+    @media (max-width: 640px){
+      #totalsBar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#111;color:#fff;padding:.5rem .75rem;display:flex;gap:.75rem;justify-content:space-between;align-items:center}
+      body{padding-bottom:58px;}
+    }
+    .cell-today{outline:2px solid #4f46e5; outline-offset: 0; border-radius: .75rem;}
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <noscript>This app requires JavaScript. Please enable it and reload.</noscript>
+  <div id="root"></div>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel" data-presets="react">
+    const { useEffect, useMemo, useState } = React;
+
+    function daysInMonth(year, monthIndex0) { return new Date(year, monthIndex0 + 1, 0).getDate(); }
+    function fmt(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+    function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+    const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const STORAGE_KEY = 'timesheet-v1.8';
+
+    function LineChart(props){
+      const points = props.points || [];
+      const width = props.width || 360;
+      const height = props.height || 120;
+      const color = props.color || "#4f46e5";
+      if(points.length===0) return React.createElement('svg', {viewBox:"0 0 "+width+" "+height, className:"w-full h-28"});
+      const pad=12, w=width-2*pad, h=height-2*pad;
+      const maxX = points[points.length-1].x || 1;
+      const maxY = Math.max.apply(null, points.map(function(p){return p.y;})) || 1;
+      const cmds = [];
+      for (var i=0;i<points.length;i++){
+        var p=points[i];
+        var x = pad + w*(p.x/maxX);
+        var y = height - pad - h*(p.y/maxY);
+        cmds.push((i===0? "M":"L")+x+","+y);
+      }
+      return React.createElement('svg', {viewBox:"0 0 "+width+" "+height, className:"w-full h-28"},
+        React.createElement('path', {d:cmds.join(" "), fill:"none", stroke:color, strokeWidth:"2"})
+      );
+    }
+
+    function BarCompare(props){
+      const weeks = props.weeks || [];
+      const targetPerWeek = props.targetPerWeek || [];
+      const width = Math.max(240, weeks.length*48 + 40);
+      const height = 120;
+      const pad=10, w=width-2*pad, h=height-26;
+      var maxY = 1;
+      for (var i=0;i<weeks.length;i++){ if(weeks[i]>maxY) maxY=weeks[i]; }
+      for (var j=0;j<targetPerWeek.length;j++){ if(targetPerWeek[j]>maxY) maxY=targetPerWeek[j]; }
+      const step = w/Math.max(1,weeks.length);
+      const nodes = [];
+      for (var k=0;k<weeks.length;k++){
+        var v = weeks[k]||0;
+        var tw = targetPerWeek[k]||0;
+        var x = pad + k*step + 6;
+        var bw = 14;
+        var barH = h*(v/maxY), ty = height-18 - barH;
+        var targH = h*(tw/maxY), ty2 = height-18 - targH;
+        nodes.push(
+          React.createElement('g', {key:k},
+            React.createElement('rect', {x:x, y:ty, width:bw, height:barH, rx:"2", className:"fill-emerald-600"}),
+            React.createElement('rect', {x:x+bw+4, y:ty2, width:bw, height:targH, rx:"2", className:"fill-gray-300"}),
+            React.createElement('text', {x:x+bw-2, y:height-6, fontSize:"10", textAnchor:"middle", className:"fill-gray-600"}, "W"+(k+1))
+          )
+        );
+      }
+      return React.createElement('svg', {viewBox:"0 0 "+width+" "+height, className:"w-full h-28"}, nodes);
+    }
+
+    function Heatmap(props){
+      const days = props.days || {year:2000,month:0,total:30};
+      const values = props.values || {};
+      const width=280, height=120, cell=16, pad=8, cols=7;
+      function shade(v){
+        if(v<=0) return "#e5e7eb"; if(v<4) return "#bfdbfe"; if(v<8) return "#60a5fa"; if(v<10) return "#2563eb"; return "#1d4ed8";
+      }
+      const firstWeekday = new Date(days.year, days.month, 1).getDay();
+      const total = days.total;
+      const items=[];
+      var r=0,c=firstWeekday;
+      for(var d=1; d<=total; d++){
+        var x=pad + c*(cell+4), y=pad + r*(cell+4);
+        var v = values[d] || 0;
+        items.push(React.createElement('rect', {key:d, x:x, y:y, width:cell, height:cell, rx:"3", fill:shade(v)}));
+        c++; if(c>=cols){ c=0; r++; }
+      }
+      return React.createElement('svg', {viewBox:"0 0 "+width+" "+height, className:"w-full h-32"}, items);
+    }
+
+    function ProgressRing(props){
+      const actual = props.actual || 0;
+      const target = props.target || 1;
+      const pct = target>0 ? clamp(actual/target,0,1) : 0;
+      const size=120, stroke=12, r=(size-stroke)/2, c=2*Math.PI*r;
+      const dash = c*pct;
+      return (
+        <svg viewBox={"0 0 " + size + " " + size} className="w-28 h-28">
+          <circle cx={size/2} cy={size/2} r={r} strokeWidth={stroke} className="fill-none stroke-gray-200"/>
+          <circle cx={size/2} cy={size/2} r={r} strokeWidth={stroke} className="fill-none stroke-indigo-600" strokeLinecap="round"
+            strokeDasharray={dash + " " + (c-dash)} transform={"rotate(-90 " + (size/2) + " " + (size/2) + ")"} />
+          <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="fill-current text-sm">{Math.round(pct*100)}%</text>
+        </svg>
+      );
+    }
+
+    function App(){
+      const [appTitle, setAppTitle] = useState((function(){ try{return localStorage.getItem('wl_title')||'Timesheet — Monthly Hours';}catch(e){return 'Timesheet — Monthly Hours';} })());
+
+      const today = new Date();
+      const [year, setYear] = useState(today.getFullYear());
+      const [month, setMonth] = useState(today.getMonth());
+
+      function loadStore(){
+        try{ var raw = localStorage.getItem(STORAGE_KEY); return raw? JSON.parse(raw) : {}; }catch(e){ return {}; }
+      }
+      const [store, setStore] = useState(loadStore());
+
+      function ymKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
+      const ym = ymKey(year, month);
+      const monthState = store[ym] || { hoursByDay:{}, notesByDay:{}, holidays:{}, longDay:0, dailyTarget:8 };
+
+      const [hoursByDay, setHoursByDay] = useState(monthState.hoursByDay || {});
+      const [notesByDay, setNotesByDay] = useState(monthState.notesByDay || {});
+      const [holidays, setHolidays] = useState(monthState.holidays || {});
+      const [longDay, setLongDay] = useState(typeof monthState.longDay==='number'?monthState.longDay:0);
+      const [dailyTarget, setDailyTarget] = useState(typeof monthState.dailyTarget==='number'?monthState.dailyTarget:8);
+      const longHours = 9.5;
+
+      useEffect(function(){
+        var next = {}; for (var k in store){ next[k]=store[k]; }
+        next[ym] = { hoursByDay:hoursByDay, notesByDay:notesByDay, holidays:holidays, longDay:longDay, dailyTarget:dailyTarget };
+        setStore(next);
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); }catch(e){}
+      }, [ym, hoursByDay, notesByDay, holidays, longDay, dailyTarget]);
+
+      useEffect(function(){ try{ localStorage.setItem('wl_title', appTitle); }catch(e){} }, [appTitle]);
+
+      const totalDays = daysInMonth(year, month);
+      function isWeekend(wd){ return wd===5 || wd===6; }
+
+      const workCols = [0,1,2,3,4];
+      const rows = useMemo(function(){
+        var out=[], current=[null,null,null,null,null,null,null];
+        for(var d=1; d<=totalDays; d++){
+          var wd = new Date(year, month, d).getDay();
+          if(isWeekend(wd)) continue;
+          if(wd===0 && current.some(function(c){return c!==null;})){ out.push(current); current=[null,null,null,null,null,null,null]; }
+          current[wd] = d;
+          var nextDate = new Date(year, month, d+1);
+          var nextIsNewWeek = nextDate.getDay()===0 || d===totalDays;
+          if(nextIsNewWeek){ out.push(current); current=[null,null,null,null,null,null,null]; }
+        }
+        if(current.some(function(c){return c!==null;})) out.push(current);
+        return out.map(function(row){ return workCols.map(function(wd){ return row[wd] || null; }); });
+      }, [year, month, totalDays]);
+
+      const workingDays = useMemo(function(){ return rows.reduce(function(acc,row){ return acc + row.filter(Boolean).length; }, 0); }, [rows]);
+      const targetMonthlyHours = workingDays * dailyTarget;
+      const actualMonthlyHours = useMemo(function(){
+        var sum=0; for(var k in hoursByDay){ sum += Number(hoursByDay[k]) || 0; } return sum;
+      }, [hoursByDay]);
+      const diff = actualMonthlyHours - targetMonthlyHours;
+      const pct = targetMonthlyHours>0 ? (actualMonthlyHours/targetMonthlyHours)*100 : 0;
+      const monthLabel = useMemo(function(){ return new Date(year,month,1).toLocaleDateString(undefined, {month:'long', year:'numeric'}); }, [year,month]);
+
+      const weekSums = useMemo(function(){
+        return rows.map(function(row){ return row.reduce(function(s,d){ return s + (d ? (Number(hoursByDay[d])||0) : 0); }, 0); });
+      }, [rows, hoursByDay]);
+      const weekTargets = useMemo(function(){ return rows.map(function(row){ return row.filter(Boolean).length * dailyTarget; }); }, [rows, dailyTarget]);
+      const weeklyAvgOverall = useMemo(function(){
+        if(!weekSums.length) return 0; var s=0; for(var i=0;i<weekSums.length;i++) s+=weekSums[i]; return s/weekSums.length;
+      }, [weekSums]);
+
+      const cumulative = useMemo(function(){
+        var sum=0, pts=[];
+        for(var d=1; d<=totalDays; d++){
+          var wd = new Date(year, month, d).getDay();
+          if(isWeekend(wd)) continue;
+          sum += Number(hoursByDay[d])||0;
+          pts.push({x:pts.length+1, y:sum});
+        }
+        return pts;
+      }, [hoursByDay, year, month, totalDays]);
+
+      const cumulativeTarget = useMemo(function(){
+        var pts=[], len=cumulative.length;
+        for(var i=1;i<=len;i++){ pts.push({x:i, y: i*dailyTarget}); }
+        return pts;
+      }, [cumulative.length, dailyTarget]);
+
+      var enteredDays = cumulative.length;
+      var avgPerEntered = enteredDays? (actualMonthlyHours/enteredDays) : 0;
+      var remainingWorking = workingDays - enteredDays;
+      var forecastTotal = actualMonthlyHours + avgPerEntered * remainingWorking;
+      var forecastDiff = forecastTotal - targetMonthlyHours;
+
+      var alerts = [];
+      if (pct < 75) alerts.push({type:'warn', text:'You are trending below 75% of monthly target.'});
+      var anyWeakWeek = weekSums.some(function(w,i){ return w < weekTargets[i]*0.6; });
+      if (anyWeakWeek) alerts.push({type:'err', text:'One or more weeks are under 60% of weekly target.'});
+
+      window.timesheetAPI = {
+        getMonthKey: function(){ return ym; },
+        getMonthData: function(){ return { year:year, month:month, hoursByDay:hoursByDay, notesByDay:notesByDay, holidays:holidays, longDay:longDay, dailyTarget:dailyTarget }; },
+        setDayHours: function(d,hrs){ setHoursByDay(function(prev){ var n={}; for(var k in prev) n[k]=prev[k]; n[d]=Number(hrs)||0; return n; }); },
+        exportJSON: function(){ return { store: store }; }
+      };
+
+      function applyLogo(url){
+        var img=document.getElementById('wl_logo');
+        if(img){ img.src=url; try{ localStorage.setItem('wl_logo', url); }catch(e){} }
+      }
+
+      function goPrevMonth(){ var m=month-1; if(m<0){ setMonth(11); setYear(function(y){return y-1;}); } else setMonth(m); }
+      function goNextMonth(){ var m=month+1; if(m>11){ setMonth(0); setYear(function(y){return y+1;}); } else setMonth(m); }
+      function prevYear(){ setYear(function(y){return y-1;}); }
+      function nextYear(){ setYear(function(y){return y+1;}); }
+      function resetToCurrent(){ var n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }
+
+      function onJumpChange(e){
+        var parts = e.target.value.split('-');
+        var y = Number(parts[0]); var m = Number(parts[1]);
+        setYear(y); setMonth(m-1);
+      }
+      var currentYM = ym;
+
+      function exportCSV(){
+        var lines = ["day,weekday,hours,holiday,notes"];
+        for(var d=1; d<=daysInMonth(year,month); d++){
+          var wd = new Date(year, month, d).getDay();
+          if(isWeekend(wd)) continue;
+          var wk = WEEKDAYS[wd];
+          var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
+          var note = notesByDay[d] ? JSON.stringify(notesByDay[d]) : "";
+          lines.push(d + "," + wk + "," + v + "," + (holidays[d]?'yes':'') + "," + note);
+        }
+        var blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = "timesheet_" + ym + ".csv";
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      }
+      function exportJSON(){
+        var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.8' };
+        var blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = "timesheet_backup_" + ym + ".json";
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      }
+      function exportPDF(){
+        var w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
+        var style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}';
+        var monthName = new Date(year,month,1).toLocaleDateString(undefined,{month:'long', year:'numeric'});
+        var rowsHtml = '';
+        for(var d=1; d<=daysInMonth(year,month); d++){
+          var wd = new Date(year,month,d).getDay(); if(isWeekend(wd)) continue;
+          var wk = WEEKDAYS[wd]; var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
+          rowsHtml += '<tr><td>'+wk+' '+d+'</td><td>'+(v!==''?Number(v).toFixed(2):'')+'</td><td>'+(holidays[d]?'Holiday':'')+'</td></tr>';
+        }
+        var summary = '<table><thead><tr><th>Metric</th><th>Value (h)</th></tr></thead><tbody>'
+          + '<tr><td>Daily target</td><td>'+ dailyTarget.toFixed(2) +'</td></tr>'
+          + '<tr><td>Target hours</td><td>'+ (targetMonthlyHours).toFixed(2) +'</td></tr>'
+          + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
+          + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
+          + '</tbody></table>';
+        var printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\/scr' + 'ipt>';
+        var html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
+          + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
+          + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th><th>Note</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+          + printScript + '</body></html>';
+        w.document.open(); w.document.write(html); w.document.close();
+      }
+
+      function fillAllWorking(){
+        var next = {}; for (var k in hoursByDay) next[k]=hoursByDay[k];
+        for (var r=0;r<rows.length;r++){
+          var row = rows[r];
+          for (var c=0;c<row.length;c++){
+            var d = row[c];
+            if (!d) continue;
+            var base = (c === longDay) ? 9.5 : dailyTarget;
+            next[d] = holidays[d] ? dailyTarget : base;
+          }
+        }
+        setHoursByDay(next);
+      }
+      function clearAll(){ setHoursByDay({}); }
+
+      const chartData = useMemo(function(){
+        var d=[];
+        for (var r=0;r<rows.length;r++){
+          var row=rows[r];
+          for (var c=0;c<row.length;c++){
+            var dayNum=row[c];
+            if(dayNum){ d.push({day: dayNum, hours: Number(hoursByDay[dayNum])||0}); }
+          }
+        }
+        d.sort(function(a,b){return a.day-b.day;});
+        return d;
+      },[rows, hoursByDay]);
+
+      function answerQuery(q){
+        q = (q||'').toLowerCase();
+        if(q.indexOf('overtime')>=0 || q.indexOf('exceed')>=0) return 'Overtime this month: ' + fmt(Math.max(0,diff)) + ' h';
+        if(q.indexOf('short')>=0 || q.indexOf('deficit')>=0) return 'Shortage this month: ' + fmt(Math.max(0,-diff)) + ' h';
+        if(q.indexOf('total')>=0) return 'Total actual hours: ' + fmt(actualMonthlyHours) + ' h';
+        if(q.indexOf('target')>=0) return 'Target hours this month: ' + fmt(targetMonthlyHours) + ' h';
+        if(q.indexOf('forecast')>=0 || q.indexOf('predict')>=0) return 'Projected end-of-month: ' + fmt(forecastTotal) + ' h (' + (forecastDiff>=0?'exceed':'shortage') + ' ' + fmt(Math.abs(forecastDiff)) + ' h)';
+        return 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?"';
+      }
+
+      function toggleHoliday(d){
+        setHolidays(function(prev){
+          var n={}; for (var k in prev) n[k]=prev[k];
+          if(n[d]) delete n[d]; else n[d]=true;
+          return n;
+        });
+        setHoursByDay(function(prev){
+          var cur = Number(prev[d])||0;
+          var n={}; for (var k in prev) n[k]=prev[k];
+          if(!holidays[d]){ n[d] = dailyTarget; } else { n[d] = cur; }
+          return n;
+        });
+      }
+
+      function setNote(d, text){
+        setNotesByDay(function(prev){ var n={}; for (var k in prev) n[k]=prev[k]; n[d]=text; return n; });
+      }
+
+      function MonthMini(props){
+        var y=props.y, m=props.m, key=ymKey(y,m), st=store[key]||{hoursByDay:{}};
+        var days=daysInMonth(y,m), sum=0, work=0;
+        for(var d=1; d<=days; d++){
+          var wd=new Date(y,m,d).getDay();
+          if(wd===5||wd===6) continue;
+          work++; sum += Number((st.hoursByDay&&st.hoursByDay[d])||0);
+        }
+        var targ = work*dailyTarget;
+        return React.createElement('div', {className:"rounded-lg border p-2 text-xs"},
+          React.createElement('div', {className:"font-semibold mb-1"}, new Date(y,m,1).toLocaleDateString(undefined,{month:'short'})),
+          React.createElement('div', null, "A: "+fmt(sum)+"h"),
+          React.createElement('div', null, "T: "+fmt(targ)+"h"),
+          React.createElement('div', {className:(sum>=targ?"text-green-700":"text-amber-700")}, (sum>=targ?"Exceed ":"Short ")+fmt(Math.abs(sum-targ))+"h")
+        );
+      }
+
+      return (
+        <div className="min-h-screen w-full">
+          <div className="max-w-7xl mx-auto p-6">
+            <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2">
+                <img id="wl_logo" src={(function(){ try{return localStorage.getItem('wl_logo')||'';}catch(e){return '';} })()} alt="" className="w-8 h-8 object-contain rounded hidden sm:block"/>
+                <input value={appTitle} onChange={function(e){setAppTitle(e.target.value);}} className="text-2xl font-bold bg-transparent w-[320px]" />
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <button onClick={prevYear} className="px-2 py-1 rounded-lg bg-gray-200">« Year</button>
+                <button onClick={goPrevMonth} className="px-2 py-1 rounded-lg bg-gray-200">◀</button>
+                <h1 className="text-xl font-semibold min-w-[180px] text-center">{monthLabel}</h1>
+                <button onClick={goNextMonth} className="px-2 py-1 rounded-lg bg-gray-200">▶</button>
+                <button onClick={nextYear} className="px-2 py-1 rounded-lg bg-gray-200">Year »</button>
+                <label className="text-sm ml-2">Jump
+                  <select value={currentYM} onChange={onJumpChange} className="ml-2 rounded-lg border px-2 py-1 bg-white">
+                    {Array.from({length:36}).map(function(_,k){
+                      var dt=new Date(new Date().getFullYear(), new Date().getMonth()+k-24,1);
+                      var val=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+                      return <option key={k} value={val}>{dt.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</option>;
+                    })}
+                  </select>
+                </label>
+                <button onClick={resetToCurrent} className="px-2 py-1 rounded-lg bg-gray-200">Reset</button>
+              </div>
+            </header>
+
+            <div className="grid sm:grid-cols-4 gap-3 mb-4 items-stretch">
+              <div className="bg-white rounded-xl p-3">
+                <div className="text-sm text-gray-600">Daily target (h)</div>
+                <input type="number" min="0" step="0.5" value={dailyTarget} onChange={function(e){ setDailyTarget(Number(e.target.value)||0); }} className="mt-1 rounded border px-2 py-1 w-28"/>
+                <div className="text-xs text-gray-500 mt-1">Long day: 9.5h</div>
+              </div>
+              <div className="bg-white rounded-xl p-3">
+                <div className="text-sm text-gray-600">Target hours</div>
+                <div className="text-xl font-bold">{fmt(targetMonthlyHours)}</div>
+                <div className="text-xs text-gray-500 mt-1">Working days × {fmt(dailyTarget)} h</div>
+                <div className="text-xs text-gray-500 mt-1">Weekly avg overall: {fmt(weeklyAvgOverall)} h</div>
+              </div>
+              <div className="bg-white rounded-xl p-3">
+                <div className="text-sm text-gray-600">Actual hours</div>
+                <div className="text-xl font-bold">{fmt(actualMonthlyHours)}</div>
+                <div className="text-xs text-gray-500 mt-1">Completion: {fmt(pct)}%</div>
+              </div>
+              <div className="rounded-xl p-3 bg-white flex items-center gap-3">
+                <div className="shrink-0"><ProgressRing actual={actualMonthlyHours} target={targetMonthlyHours} /></div>
+                <div>
+                  <div className="text-sm font-semibold">{diff>=0? 'Exceed by':'Shortage of'}</div>
+                  <div className="text-xl font-bold">{fmt(Math.abs(diff))} h</div>
+                  <div className="text-xs opacity-80 mt-1">Forecast: {fmt(forecastTotal)} h ({forecastDiff>=0?'exceed':'shortage'} {fmt(Math.abs(forecastDiff))} h)</div>
+                </div>
+              </div>
+            </div>
+
+            {alerts.length>0 && (
+              <div className="mb-3">
+                {alerts.map(function(a,i){
+                  return <div key={i} className={'rounded-lg px-3 py-2 mb-2 ' + (a.type==='err'?'bg-amber-100 text-amber-800':'bg-indigo-50 text-indigo-700')}>{a.text}</div>;
+                })}
+              </div>
+            )}
+
+            <div className="grid lg:grid-cols-2 gap-4 mb-4">
+              <div className="bg-white rounded-2xl shadow p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">Trend — Daily hours (Sun–Thu)</h3>
+                  <div className="text-xs text-gray-500">Dashed line shows daily target</div>
+                </div>
+                <div className="mt-1">
+                  {(function(){
+                    var width=360, height=120, pad=12, innerW=width-2*pad, innerH=height-2*pad;
+                    var data=chartData;
+                    var maxY=1; for (var i=0;i<data.length;i++){ if(data[i].hours>maxY) maxY=data[i].hours; } if(dailyTarget*1.5>maxY) maxY=dailyTarget*1.5;
+                    var barW=Math.max(6, innerW/Math.max(1,data.length)*0.7);
+                    var step = innerW/Math.max(1,data.length);
+                    var nodes=[React.createElement('line',{key:'t',x1:pad,y1:height-pad-innerH*(dailyTarget/maxY),x2:width-pad,y2:height-pad-innerH*(dailyTarget/maxY),className:"stroke-gray-400",strokeDasharray:"4 3"})];
+                    for (var idx=0; idx<data.length; idx++){
+                      var d=data[idx]; var x=pad+step*idx+(step-barW)/2; var h=innerH*(d.hours/maxY); var y=height-pad-h;
+                      nodes.push(React.createElement('rect',{key:idx,x:x,y:y,width:barW,height:h,rx:"2",className:(d.hours>=dailyTarget)?'fill-green-600':'fill-amber-600'}));
+                    }
+                    return React.createElement('svg',{viewBox:'0 0 '+width+' '+height,className:"w-full h-28"}, nodes);
+                  })()}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">Weekly comparison</h3>
+                  <div className="text-xs text-gray-500">Actual vs target per week</div>
+                </div>
+                <BarCompare weeks={weekSums} targetPerWeek={weekTargets} />
+                <div className="text-xs text-gray-600 mt-2">Blue = Actual, Gray = Target</div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">Cumulative vs Target</h3>
+                </div>
+                <LineChart points={cumulative} />
+                <div className="text-xs text-gray-500">Cumulative actual hours. Target progression is {fmt(dailyTarget)}h × day.</div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">Heatmap</h3>
+                  <div className="text-xs text-gray-500">Intensity by hours</div>
+                </div>
+                <Heatmap days={{year:year,month:month,total:daysInMonth(year,month)}} values={hoursByDay} />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">Daily entries (Sun–Thu)</h3>
+                <div className="text-xs text-gray-500">Toggle H = holiday (sets {fmt(dailyTarget)}h). Long day shows 9.5h.</div>
+              </div>
+
+              <div className="grid gap-3">
+                {rows.map(function(row, ri){
+                  var weekDaysCount = row.filter(Boolean).length || 1;
+                  var weekSum = row.reduce(function(s, d){ return s + (d ? (Number(hoursByDay[d])||0) : 0); }, 0);
+                  var weekAvg = weekSum / weekDaysCount;
+                  return (
+                    <div key={'row'+ri} className="border rounded-xl p-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm">Week {ri+1} — Subtotal <b>{fmt(weekSum)}</b>h · Avg <b>{fmt(weekAvg)}</b>h/day</div>
+                      </div>
+
+                      <div className="grid gap-2" style={{gridTemplateColumns: 'repeat(' + row.length + ', minmax(0,1fr))'}}>
+                        {row.map(function(dayNum, j){
+                          var isLongCol = (j === longDay);
+                          var isToday = (new Date().getFullYear()===year && new Date().getMonth()===month && new Date().getDate()===dayNum);
+                          var highlight = isLongCol ? 'bg-indigo-50' : '';
+                          var holiday = !!holidays[dayNum];
+                          return (
+                            <div key={'c'+j} className={'rounded-xl border p-2 '+highlight+' '+(isToday?'cell-today':'')}>
+                              {dayNum ? (
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-gray-500">{WEEKDAYS[j]} {dayNum}</span>
+                                    <div className="flex items-center gap-1">
+                                      {isLongCol ? <span title="Long day" className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">9.5h</span> : null}
+                                      <button onClick={function(){toggleHoliday(dayNum);}} title="Toggle holiday" className={'text-[10px] px-1.5 py-0.5 rounded '+(holiday?'bg-amber-200 text-amber-900':'bg-gray-100')}>H</button>
+                                    </div>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    className="w-full rounded-lg border px-2 py-1"
+                                    value={(hoursByDay[dayNum]===undefined || hoursByDay[dayNum]===null)? '': hoursByDay[dayNum]}
+                                    onChange={function(e){
+                                      var v = e.target.value === '' ? NaN : Number(e.target.value);
+                                      setHoursByDay(function(prev){
+                                        var n = {}; for (var k in prev) n[k]=prev[k];
+                                        if (isNaN(v)) delete n[dayNum]; else n[dayNum] = v;
+                                        return n;
+                                      });
+                                    }}
+                                  />
+                                  <textarea
+                                    className="mt-2 w-full rounded-lg border px-2 py-1 text-sm"
+                                    rows="2"
+                                    placeholder="Notes (project, task, etc.)"
+                                    value={notesByDay[dayNum] ? notesByDay[dayNum] : ''}
+                                    onChange={function(e){ setNote(dayNum, e.target.value); }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-7 sm:h-10" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-4 mt-4">
+              <h3 className="font-semibold mb-2">Year overview (read-only)</h3>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {Array.from({length:12}).map(function(_,i){ return <MonthMini key={i} y={year} m={i} />; })}
+              </div>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-4 mt-4">
+              <div className="bg-white rounded-2xl shadow p-4">
+                <h3 className="font-semibold mb-2">AI Q&A (local)</h3>
+                <div className="text-xs text-gray-500 mb-2">Try: "overtime?", "shortage?", "total?", "target?", "forecast?"</div>
+                <input id="qa" className="rounded border px-2 py-1 w-full mb-2" placeholder="Ask a question..." onKeyDown={function(e){
+                  if(e.key==='Enter'){ var ans=answerQuery(e.target.value); var out=document.getElementById('qa_out'); if(out) out.textContent=ans; }
+                }} />
+                <div id="qa_out" className="text-sm bg-gray-50 rounded p-2 min-h-[36px]"></div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow p-4">
+                <h3 className="font-semibold mb-2">Insights</h3>
+                <div className="text-xs text-gray-500 mb-1">Average hours by weekday</div>
+                <div className="grid grid-cols-5 gap-2 text-sm">
+                  {['Sun','Mon','Tue','Wed','Thu'].map(function(n,i){
+                    var sums=[0,0,0,0,0], counts=[0,0,0,0,0];
+                    for(var d=1; d<=totalDays; d++){
+                      var wd=new Date(year,month,d).getDay();
+                      if(wd===5||wd===6) continue;
+                      sums[wd]+=Number(hoursByDay[d])||0; counts[wd]++;
+                    }
+                    var avg = counts[i]? sums[i]/counts[i] : 0;
+                    return (
+                      <div key={i} className="rounded bg-gray-50 p-2 text-center">
+                        <div className="text-xs text-gray-600">{n}</div>
+                        <div className="font-semibold">{fmt(avg)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-xs text-gray-500 mt-2">Monthly summary: You worked {fmt(actualMonthlyHours)}h out of {fmt(targetMonthlyHours)}h. Forecast indicates {forecastDiff>=0?'exceed':'shortage'} by {fmt(Math.abs(forecastDiff))}h.</div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button onClick={fillAllWorking} className="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
+              <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
+              <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
+              <button onClick={exportPDF} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Export PDF</button>
+              <button onClick={exportJSON} className="px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90">Backup JSON</button>
+              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
+                Restore JSON
+                <input id="restoreFile" type="file" accept="application/json" className="hidden"
+                  onchange="(function(el){ var f=el.files && el.files[0]; if(f){ var reader=new FileReader(); reader.onload=function(){ try{ var obj=JSON.parse(reader.result); if(obj && obj.store){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.store)); location.reload(); } }catch(e){ alert('Invalid JSON'); } }; reader.readAsText(f); el.value=''; } })(this)">
+              </label>
+              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
+                Set Logo URL
+                <input type="url" className="hidden" onChange={function(e){ applyLogo(e.target.value); }} />
+              </label>
+            </div>
+
+            <footer className="text-xs text-gray-500 mt-6 text-center space-y-1">
+              <div>V1.8 · Sun–Thu (Fri+Sat weekend). Configurable target, holiday default to target, long day 9.5h. Charts, insights, year overview, API shim.</div>
+              <div id="buildInfo" className="opacity-70"></div>
+            </footer>
+
+            <div id="totalsBar" className="sm:hidden mt-3">
+              <div className="text-xs">Target: <b>{fmt(targetMonthlyHours)}</b>h</div>
+              <div className="text-xs">Actual: <b>{fmt(actualMonthlyHours)}</b>h</div>
+              <div className="text-xs">{diff>=0?'Exceed':'Shortage'}: <b>{fmt(Math.abs(diff))}</b>h</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const mount = document.getElementById('root');
+    window.addEventListener('error', function(e){
+      if(mount && !mount.childElementCount){
+        mount.innerHTML = '<div style="padding:1rem;background:#fee2e2;color:#7f1d1d;border-radius:.5rem;">A runtime error occurred. Open the browser console and share the error message.</div>';
+      }
+    });
+    try {
+      const root = ReactDOM.createRoot(mount);
+      root.render(React.createElement(App));
+    } catch (err) {
+      console.error('Render error:', err);
+      mount.innerHTML = '<div style="padding:1rem;background:#fee2e2;color:#7f1d1d;border-radius:.5rem;">App failed to load. Open the browser console and share the error message.</div>';
+    }
+
+    (function(){
+      var baseVersion = "1.8";
+      var storedBuild = null; try{ storedBuild = localStorage.getItem("timesheetBuild"); }catch(e){}
+      var nextBuild = 1;
+      if (storedBuild) {
+        var parts = storedBuild.split(".");
+        var last = parseInt(parts[parts.length - 1], 10);
+        nextBuild = (isNaN(last) ? 0 : last) + 1;
+      }
+      var buildNumber = baseVersion + "." + nextBuild;
+      try{ localStorage.setItem("timesheetBuild", buildNumber); }catch(e){}
+      var el = document.getElementById("buildInfo");
+      if (el) el.textContent = "Build: " + buildNumber + " · Last updated: " + new Date().toLocaleString();
+    })();
+  </script>
+</body>
+</html>

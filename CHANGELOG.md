@@ -1,1 +1,2 @@
-# V1.8-beta CHANGELOG
+# 1.8 — 2025-09-06
+- Build refresh
