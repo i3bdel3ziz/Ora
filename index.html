@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Timesheet — Monthly Hours (V1.8)</title>
+  <title>TimeSheet</title>
   <meta name="description" content="Timesheet V1.8: Sun–Thu week (Fri+Sat weekend), configurable target, holiday toggle, long day 9.5h, comparison & cumulative charts, heatmap, notes, alerts, API shim, white-label, AI-ish Q&A & insights." />
   <link rel="icon" href="favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -120,7 +120,7 @@
     }
 
     function App(){
-      const [appTitle, setAppTitle] = useState((function(){ try{return localStorage.getItem('wl_title')||'Timesheet — Monthly Hours';}catch(e){return 'Timesheet — Monthly Hours';} })());
+      const [appTitle, setAppTitle] = useState((function(){ try{return localStorage.getItem('wl_title')||'TimeSheet';}catch(e){return 'TimeSheet';} })());
 
       const today = new Date();
       const [year, setYear] = useState(today.getFullYear());
@@ -133,18 +133,17 @@
 
       function ymKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
       const ym = ymKey(year, month);
-      const monthState = store[ym] || { hoursByDay:{}, notesByDay:{}, holidays:{}, longDay:0, dailyTarget:8 };
+      const monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0, dailyTarget:8 };
 
       const [hoursByDay, setHoursByDay] = useState(monthState.hoursByDay || {});
-      const [notesByDay, setNotesByDay] = useState(monthState.notesByDay || {});
       const [holidays, setHolidays] = useState(monthState.holidays || {});
-      const [longDay, setLongDay] = useState(typeof monthState.longDay==='number'?monthState.longDay:0);
+      const [longDay, setLongDay] = useState(typeof monthState.longDay==='number'?monthState.longDay:0); = useState(typeof monthState.longDay==='number'?monthState.longDay:0);
       const [dailyTarget, setDailyTarget] = useState(typeof monthState.dailyTarget==='number'?monthState.dailyTarget:8);
       const longHours = 9.5;
 
       useEffect(function(){
         var next = {}; for (var k in store){ next[k]=store[k]; }
-        next[ym] = { hoursByDay:hoursByDay, notesByDay:notesByDay, holidays:holidays, longDay:longDay, dailyTarget:dailyTarget };
+        next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, dailyTarget:dailyTarget };
         setStore(next);
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); }catch(e){}
       }, [ym, hoursByDay, notesByDay, holidays, longDay, dailyTarget]);
@@ -217,7 +216,7 @@
 
       window.timesheetAPI = {
         getMonthKey: function(){ return ym; },
-        getMonthData: function(){ return { year:year, month:month, hoursByDay:hoursByDay, notesByDay:notesByDay, holidays:holidays, longDay:longDay, dailyTarget:dailyTarget }; },
+        getMonthData: function(){ return { year:year, month:month, hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, dailyTarget:dailyTarget }; },
         setDayHours: function(d,hrs){ setHoursByDay(function(prev){ var n={}; for(var k in prev) n[k]=prev[k]; n[d]=Number(hrs)||0; return n; }); },
         exportJSON: function(){ return { store: store }; }
       };
@@ -241,14 +240,13 @@
       var currentYM = ym;
 
       function exportCSV(){
-        var lines = ["day,weekday,hours,holiday,notes"];
+        var lines = ["day,weekday,hours,holiday"];
         for(var d=1; d<=daysInMonth(year,month); d++){
           var wd = new Date(year, month, d).getDay();
           if(isWeekend(wd)) continue;
           var wk = WEEKDAYS[wd];
           var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
-          var note = notesByDay[d] ? JSON.stringify(notesByDay[d]) : "";
-          lines.push(d + "," + wk + "," + v + "," + (holidays[d]?'yes':'') + "," + note);
+          lines.push(d + "," + wk + "," + v + "," + (holidays[d]?'yes':'') + ");
         }
         var blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
         var url = URL.createObjectURL(blob);
@@ -279,9 +277,9 @@
           + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
           + '</tbody></table>';
         var printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\/scr' + 'ipt>';
-        var html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
+        var html = '<!doctype html><html><head><meta charset="utf-8"><title>TimeSheet</title><style>'+style+'</style></head>'
           + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
-          + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th><th>Note</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+          + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
           + printScript + '</body></html>';
         w.document.open(); w.document.write(html); w.document.close();
       }
@@ -338,10 +336,7 @@
         });
       }
 
-      function setNote(d, text){
-        setNotesByDay(function(prev){ var n={}; for (var k in prev) n[k]=prev[k]; n[d]=text; return n; });
-      }
-
+      
       function MonthMini(props){
         var y=props.y, m=props.m, key=ymKey(y,m), st=store[key]||{hoursByDay:{}};
         var days=daysInMonth(y,m), sum=0, work=0;
@@ -386,11 +381,20 @@
               </div>
             </header>
 
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button onClick={fillAllWorking} className="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
+              <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
+              <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
+              <button onClick={exportPDF} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Export PDF</button>
+              <button onClick={exportJSON} className="px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90">Backup JSON</button>
+              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">Restore JSON<input id="restoreFile" type="file" accept="application/json" className="hidden" onChange={function(e){ var f = e.target.files && e.target.files[0]; if(f){ var reader=new FileReader(); reader.onload=function(){ try{ var obj=JSON.parse(reader.result); if(obj && obj.store){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.store)); location.reload(); } }catch(err){ alert('Invalid JSON'); } }; reader.readAsText(f); e.target.value=''; } }} /></label>
+              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
+                Set Logo URL
+                <input type="url" className="hidden" onChange={function(e){ applyLogo(e.target.value); }} />
+              </label>
+            </div>
+
             <div className="grid sm:grid-cols-4 gap-3 mb-4 items-stretch">
-              <div className="bg-white rounded-xl p-3">
-                <div className="text-sm text-gray-600">Daily target (h)</div>
-                <input type="number" min="0" step="0.5" value={dailyTarget} onChange={function(e){ setDailyTarget(Number(e.target.value)||0); }} className="mt-1 rounded border px-2 py-1 w-28"/>
-                <div className="text-xs text-gray-500 mt-1">Long day: 9.5h</div>
               </div>
               <div className="bg-white rounded-xl p-3">
                 <div className="text-sm text-gray-600">Target hours</div>
@@ -581,18 +585,7 @@
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-4">
-              <button onClick={fillAllWorking} className="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
-              <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
-              <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
-              <button onClick={exportPDF} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Export PDF</button>
-              <button onClick={exportJSON} className="px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90">Backup JSON</button>
-              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">Restore JSON<input id="restoreFile" type="file" accept="application/json" className="hidden" onChange={function(e){ var f = e.target.files && e.target.files[0]; if(f){ var reader=new FileReader(); reader.onload=function(){ try{ var obj=JSON.parse(reader.result); if(obj && obj.store){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.store)); location.reload(); } }catch(err){ alert('Invalid JSON'); } }; reader.readAsText(f); e.target.value=''; } }} /></label>
-              <label className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
-                Set Logo URL
-                <input type="url" className="hidden" onChange={function(e){ applyLogo(e.target.value); }} />
-              </label>
-            </div>
+            
 
             <footer className="text-xs text-gray-500 mt-6 text-center space-y-1">
               <div>V1.8 · Sun–Thu (Fri+Sat weekend). Configurable target, holiday default to target, long day 9.5h. Charts, insights, year overview, API shim.</div>
