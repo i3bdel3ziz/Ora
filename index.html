@@ -15,35 +15,22 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script type="text/babel">
+  <script type="text/babel" data-presets="react">
     const { useEffect, useMemo, useRef, useState } = React;
+
     function daysInMonth(year, monthIndex0) { return new Date(year, monthIndex0 + 1, 0).getDate(); }
     function fmt(n) { return (Math.round(n * 100) / 100).toFixed(2); }
-    function parseHours(text) {
-      const s = (typeof text === 'string' ? text : '').trim();
-      if (s === '') return NaN;
-      if (s.includes(':')) {
-        let t = s;
-        const sign = t.startsWith('-') ? -1 : 1;
-        if (t.startsWith('-') || t.startsWith('+')) t = t.slice(1);
-        const parts = t.split(':');
-        if (parts.length !== 2) return NaN;
-        const h = Number(parts[0]);
-        const m = Number(parts[1]);
-        if (!isFinite(h) || !isFinite(m) || m < 0 || m >= 60) return NaN;
-        return sign * (h + m / 60);
-      }
-      const num = Number(s.replace(',', '.'));
-      return isFinite(num) ? num : NaN;
-    }
-    const STORAGE_KEY = 'hours-calculator-pages-v3';
-    const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const WORKING_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
+
+    const STORAGE_KEY = 'hours-calculator-pages-v4';
+    const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const WORKING_WEEK = ['Sun','Mon','Tue','Wed','Thu'];
+
     function useDarkMode() {
       const [dark, setDark] = useState(() => { try { return localStorage.getItem('hours-dark') === '1'; } catch { return false; } });
       useEffect(() => { try { localStorage.setItem('hours-dark', dark ? '1' : '0'); } catch {} document.documentElement.classList.toggle('dark', dark); }, [dark]);
       return { dark, setDark };
     }
+
     function App() {
       const today = new Date();
       const [year, setYear] = useState(today.getFullYear());
@@ -51,26 +38,22 @@
       const [hoursByDay, setHoursByDay] = useState({});
       const { dark, setDark } = useDarkMode();
       const inputRefs = useRef({});
+
       useEffect(() => { try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) { const p = JSON.parse(raw); setYear(typeof p.year === 'number' ? p.year : year); setMonth(typeof p.month === 'number' ? p.month : month); setHoursByDay(p.hoursByDay ?? {}); } } catch {} }, []);
       useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ year, month, hoursByDay })); } catch {} }, [year, month, hoursByDay]);
+
       const totalDays = daysInMonth(year, month);
-      const rows = useMemo(() => { const out = []; let current = [null, null, null, null, null]; for (let d = 1; d <= totalDays; d++) { const wd = new Date(year, month, d).getDay(); if (wd === 5 || wd === 6) continue; const col = wd === 0 ? 0 : wd; if (col === 0 && current.some(c => c !== null)) { out.push(current); current = [null, null, null, null, null]; } current[col] = d; if (col === 4) { out.push(current); current = [null, null, null, null, null]; } } if (current.some(c => c !== null)) out.push(current); return out; }, [year, month, totalDays]);
+      const rows = useMemo(() => { const out=[]; let current=[null,null,null,null,null]; for (let d=1; d<=totalDays; d++){ const wd=new Date(year,month,d).getDay(); if (wd===5||wd===6) continue; const col=wd===0?0:wd; if (col===0 && current.some(c=>c!==null)){ out.push(current); current=[null,null,null,null,null]; } current[col]=d; if (col===4){ out.push(current); current=[null,null,null,null,null]; } } if (current.some(c=>c!==null)) out.push(current); return out; }, [year, month, totalDays]);
+
       const workingDays = useMemo(() => rows.flat().filter(Boolean).length, [rows]);
       const targetMonthlyHours = workingDays * 8;
-      const actualMonthlyHours = useMemo(() => Object.values(hoursByDay).reduce((s, v) => s + (Number(v) || 0), 0), [hoursByDay]);
+      const actualMonthlyHours = useMemo(() => Object.values(hoursByDay).reduce((s,v)=>s+(Number(v)||0),0), [hoursByDay]);
       const diff = actualMonthlyHours - targetMonthlyHours;
       const monthLabel = useMemo(() => new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), [year, month]);
-      const isToday = (d) => today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
-      const getDayClass = (d) => { const v = hoursByDay[d]; if (typeof v !== 'number') return ''; if (v > 8) return 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-200'; if (v < 8) return 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200'; return ''; };
-      const focusableDays = useMemo(() => rows.flat().filter(Boolean), [rows]);
-      const focusDay = (day) => { if (day != null && inputRefs.current[day]) inputRefs.current[day].focus(); };
-      const handleKeyNav = (e, day, colIndex, rowIndex) => { const key = e.key; if (["Enter", "ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Tab"].includes(key)) { e.preventDefault(); } const flatIndex = focusableDays.indexOf(day); if (key === 'Enter' || key === 'ArrowRight' || (key === 'Tab' && !e.shiftKey)) { focusDay(focusableDays[flatIndex + 1]); } else if (key === 'ArrowLeft' || (key === 'Tab' && e.shiftKey)) { focusDay(focusableDays[flatIndex - 1]); } else if (key === 'ArrowDown') { const nextRow = rows[rowIndex + 1]; const nextDay = nextRow ? (nextRow[colIndex] ?? undefined) : undefined; focusDay(nextDay); } else if (key === 'ArrowUp') { const prevRow = rows[rowIndex - 1]; const prevDay = prevRow ? (prevRow[colIndex] ?? undefined) : undefined; focusDay(prevDay); } };
-      function exportCSV() { const lines = []; lines.push('# Timesheet Export'); lines.push('# Month,Year'); lines.push(`${month + 1},${year}`); lines.push('day,weekday,hours'); focusableDays.forEach(d => { const wd = new Date(year, month, d).getDay(); const wk = WEEKDAYS[wd]; const v = hoursByDay[d] ?? ''; lines.push(`${d},${wk},${v}`); }); const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `timesheet_${year}_${String(month + 1).padStart(2, '0')}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
-      function importCSV(text) { const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length); let m = month, y = year; const next = { ...hoursByDay }; for (const line of lines) { if (line.startsWith('#')) continue; const parts = line.split(',').map(s => s.trim()); if (parts.length === 2 && /(\d{1,2})/.test(parts[0]) && /(\d{4})/.test(parts[1])) { const mm = Number(parts[0]); const yy = Number(parts[1]); if (mm >= 1 && mm <= 12) m = mm - 1; if (yy >= 1970 && yy <= 3000) y = yy; continue; } if (parts.length >= 2 && /(\d{1,2})/.test(parts[0])) { const d = Number(parts[0]); const vStr = parts[2] ?? parts[1]; const v = parseHours(vStr); if (Number.isFinite(v)) next[d] = v; } } setYear(y); setMonth(m); setHoursByDay(next); }
-      const fileInputRef = React.useRef(null);
-      function setAllWeekdaysToTarget() { const next = { ...hoursByDay }; focusableDays.forEach(d => { next[d] = 8; }); setHoursByDay(next); }
-      function clearAll() { setHoursByDay({}); }
-      function resetToCurrentMonth() { const now = new Date(); setYear(now.getFullYear()); setMonth(now.getMonth()); }
+
+      const isToday = (d) => today.getFullYear()===year && today.getMonth()===month && today.getDate()===d;
+      const getDayClass = (d) => { const v=hoursByDay[d]; if (typeof v!=='number') return ''; if (v>8) return 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-200'; if (v<8) return 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200'; return ''; };
+
       return (
         <div className="min-h-screen w-full">
           <div className="max-w-5xl mx-auto p-6">
@@ -80,82 +63,39 @@
                 <label className="text-sm flex items-center gap-2">
                   <span>Month</span>
                   <select className="rounded-lg border px-3 py-2 bg-white dark:bg-gray-800" value={month} onChange={e=>setMonth(Number(e.target.value))}>
-                    {Array.from({length:12}).map((_,i)=>(
-                      <option key={i} value={i}>{new Date(2020,i,1).toLocaleString(undefined,{month:'long'})}</option>
-                    ))}
+                    {Array.from({length:12}).map((_,i)=>(<option key={i} value={i}>{new Date(2020,i,1).toLocaleString(undefined,{month:'long'})}</option>))}
                   </select>
                 </label>
                 <label className="text-sm flex items-center gap-2">
                   <span>Year</span>
                   <input type="number" className="rounded-lg border px-3 py-2 w-28 bg-white dark:bg-gray-800" value={year} onChange={e=>setYear(Number(e.target.value))} />
                 </label>
-                <button onClick={resetToCurrentMonth} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">Reset to current</button>
-                <button onClick={setAllWeekdaysToTarget} className="px-3 py-2 rounded-xl bg-gray-900 text-white shadow hover:opacity-90">Fill all</button>
-                <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">Clear all</button>
-                <button onClick={() => fileInputRef.current?.click()} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Import CSV</button>
-                <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={async (e)=>{
-                  const file = e.target.files?.[0]; if (!file) return; const txt = await file.text(); importCSV(txt); e.currentTarget.value = '';
-                }} />
-                <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
-                <DarkToggle />
+                <button onClick={()=>{ const now=new Date(); setYear(now.getFullYear()); setMonth(now.getMonth()); }} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">Reset</button>
+                <button onClick={()=>{ const next={...hoursByDay}; rows.flat().filter(Boolean).forEach(d=>{ next[d]=8; }); setHoursByDay(next); }} className="px-3 py-2 rounded-xl bg-gray-900 text-white shadow hover:opacity-90">Fill all</button>
+                <button onClick={()=>setHoursByDay({})} className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">Clear all</button>
+                <button onClick={()=>setDark(!dark)} className="px-3 py-2 rounded-xl bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900">{dark ? '☀️ Light' : '🌙 Dark'}</button>
               </div>
             </header>
-            <SummaryCards targetMonthlyHours={targetMonthlyHours} workingDays={workingDays} actualMonthlyHours={actualMonthlyHours} diff={diff} />
-            <DailyGrid rows={rows} hoursByDay={hoursByDay} setHoursByDay={setHoursByDay} isToday={isToday} getDayClass={getDayClass} handleKeyNav={handleKeyNav} />
-            <footer className="text-xs text-gray-500 mt-6 text-center">Data stays in your browser. Qatar weekend (Fri+Sat). Daily target fixed at 8 hours.</footer>
+
+            <div className="grid sm:grid-cols-3 gap-3 mb-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3">
+                <div className="text-gray-600 dark:text-gray-300 text-sm">Target hours</div>
+                <div className="text-xl font-bold">{fmt(targetMonthlyHours)}</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3">
+                <div className="text-gray-600 dark:text-gray-300 text-sm">Actual hours</div>
+                <div className="text-xl font-bold">{fmt(actualMonthlyHours)}</div>
+              </div>
+              <div className={`rounded-xl p-3 ${diff>=0 ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-200' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'}`}>
+                <div className="text-sm font-semibold">{diff>=0? 'Exceed by':'Shortage of'}</div>
+                <div className="text-xl font-bold">{fmt(Math.abs(diff))} h</div>
+              </div>
+            </div>
           </div>
         </div>
       );
-      function DarkToggle(){ return <button onClick={()=>setDark(!dark)} className="px-3 py-2 rounded-xl bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900">{dark ? '☀️ Light' : '🌙 Dark'}</button>; }
-      function SummaryCards({targetMonthlyHours, workingDays, actualMonthlyHours, diff}){
-        return (<div className="grid sm:grid-cols-3 gap-3 mb-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-3">
-            <div className="text-gray-600 dark:text-gray-300 text-sm">Target hours</div>
-            <div className="text-xl font-bold">{fmt(targetMonthlyHours)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Working days (Sun–Thu): {workingDays} × 8 h</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-3">
-            <div className="text-gray-600 dark:text-gray-300 text-sm">Actual hours</div>
-            <div className="text-xl font-bold">{fmt(actualMonthlyHours)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Sum of daily entries</div>
-          </div>
-          <div className={\`rounded-xl p-3 \${diff>=0? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-200':'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'}\`}>
-            <div className="text-sm font-semibold">{diff>=0? 'Exceed by':'Shortage of'}</div>
-            <div className="text-xl font-bold">{fmt(Math.abs(diff))} h</div>
-          </div>
-        </div>);
-      }
-      function DailyGrid({rows, hoursByDay, setHoursByDay, isToday, getDayClass, handleKeyNav}){
-        return (<div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Daily entries (Sun–Thu)</h3>
-            <div className="text-xs text-gray-500 dark:text-gray-300">Use Enter/Arrows to move. Today is highlighted.</div>
-          </div>
-          <div className="hidden sm:grid grid-cols-5 gap-2 text-sm mb-1">
-            {WORKING_WEEK.map((wd) => (<div key={wd} className="text-center font-medium text-gray-600 dark:text-gray-300">{wd}</div>))}
-          </div>
-          <div className="grid gap-3">
-            {rows.map((row, ri) => {
-              const weekSum = row.reduce((s, d) => s + (d ? (Number(hoursByDay[d])||0) : 0), 0);
-              return (<div key={\`row\${ri}\`} className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                {row.map((dayNum, j) => (<div key={\`r\${ri}c\${j}\`} className={\`rounded-xl border p-2 \${dayNum && isToday(dayNum) ? 'ring-2 ring-blue-400' : ''} \${dayNum ? getDayClass(dayNum) : ''}\`}>
-                  {dayNum ? (<>
-                    <div className="flex items-center justify-between mb-2"><span className="text-xs text-gray-500 dark:text-gray-300">{WORKING_WEEK[j]} {dayNum}</span></div>
-                    <input ref={el => { if (dayNum != null) inputRefs.current[dayNum] = el; }} type="number" step={0.25} min={0} className="w-full rounded-lg border px-2 py-1 bg-white dark:bg-gray-600" value={hoursByDay[dayNum] ?? ''}
-                      onChange={(e) => { const v = e.target.value === '' ? NaN : Number(e.target.value); setHoursByDay(prev => { const next = { ...prev }; if (Number.isNaN(v)) delete next[dayNum]; else next[dayNum] = v; return next; }); }}
-                      onKeyDown={(e)=> handleKeyNav(e, dayNum, j, ri)}
-                    /></>) : (<div className="h-7 sm:h-10" />)}
-                </div>))}
-                <div className="sm:col-span-5 col-span-1 -mt-1 text-right text-sm text-gray-700 dark:text-gray-200"><span className="inline-block rounded-lg px-2 py-1 bg-gray-100 dark:bg-gray-700">Week subtotal: <b>{fmt(weekSum)}</b> h</span></div>
-              </div>);
-            })}
-          </div>
-          <div className="mt-4 text-right text-sm text-gray-700 dark:text-gray-200">
-            <span className="inline-block rounded-lg px-2 py-1 bg-gray-100 dark:bg-gray-700">Running total: <b>{fmt(Object.values(hoursByDay).reduce((s,v)=>s+(Number(v)||0),0))}</b> h</span>
-          </div>
-        </div>);
-      }
     }
+
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
