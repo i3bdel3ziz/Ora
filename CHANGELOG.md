@@ -1,4 +1,4 @@
 # Changelog
 
-## 1.7.5 — 2025-09-05
-- Wrapped returned JSX with a fragment to resolve adjacent elements error.
+## 1.7.6 — 2025-09-05
+- Wrapped App() return JSX in <>...</> to fix adjacent elements error.

@@ -1,8 +1,6 @@
-# Timesheet App — V1.7.5 (Fragment-wrapped return)
+# Timesheet App — V1.7.6 (Targeted fragment wrap)
 
-- Wraps the component `return` JSX in a React Fragment to fix "Adjacent JSX elements must be wrapped" error.
-- Keeps all prior fixes (no JSX comments).
+- Fixes "Adjacent JSX elements" by wrapping only App()'s return in a fragment.
+- Avoids touching other returns like fmt().
 
-## Deploy
-Upload `index.html` to your repo root (main branch), then open:
-`https://<your-username>.github.io/Timesheet_App/?_v=1.7.5`
+Deploy with ?_v=1.7.6 after upload.
