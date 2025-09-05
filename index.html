@@ -240,14 +240,20 @@
       var currentYM = ym;
 
       function exportCSV(){
-        var lines = ["day,weekday,hours,holiday"];
-        for(var d=1; d<=daysInMonth(year,month); d++){
-          var wd = new Date(year, month, d).getDay();
-          if(isWeekend(wd)) continue;
-          var wk = WEEKDAYS[wd];
-          var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
-          lines.push(d + "," + wk + "," + v + "," + (holidays[d]?'yes':'') + ");
-        }
+  var lines = ["day,weekday,hours,holiday"];
+  for(var d=1; d<=daysInMonth(year,month); d++){
+    var wd = new Date(year, month, d).getDay();
+    if(wd===5 || wd===6) continue;
+    var wk = WEEKDAYS[wd];
+    var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
+    lines.push(d + "," + wk + "," + v + "," + (holidays[d]?'yes':'') );
+  }
+  var blob = new Blob([lines.join('
+')], { type:'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = "timesheet_" + ym + ".csv";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
         var blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a'); a.href = url; a.download = "timesheet_" + ym + ".csv";
