@@ -149,7 +149,7 @@
         document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }
 
-      // PDF Export (print window)
+      // PDF Export (print window) — IMPORTANT: escape </script> inside HTML string
       function exportPDF(){
         const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
         const style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}';
@@ -165,10 +165,12 @@
           + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
           + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
           + '</tbody></table>';
+        // Escape the closing script tag to avoid terminating the outer <script> block
+        const printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\/scr' + 'ipt>';
         const html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
           + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
           + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
-          + '<script>window.onload=()=>window.print()</script></body></html>';
+          + printScript + '</body></html>';
         w.document.open(); w.document.write(html); w.document.close();
       }
 
