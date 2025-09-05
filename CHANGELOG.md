@@ -1,2 +1,2 @@
-# 1.8 — 2025-09-06
-- Build refresh
+## 1.8-no-babel-stable
+- Rewrote UI in vanilla JS to remove inline Babel/JSX failures on GitHub Pages.

@@ -1,1 +1,2 @@
-# V1.8 — includes V1.8 features on top of V1.7.6
+# TimeSheet — V1.8 (No-Babel stable)
+This build avoids inline Babel/JSX. Vanilla JS app with the same core features.
