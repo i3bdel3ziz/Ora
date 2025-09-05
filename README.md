@@ -1,47 +1,16 @@
-# Timesheet_App (GitHub Pages Ready)
+# Timesheet App — Full Fixed Build
 
-Single-file React app with Tailwind CSS. Features:
-- Sun–Thu working days (Fri+Sat weekend, Qatar)
+Includes:
+- Sun–Thu working days (Fri+Sat weekend)
 - Fixed 8h/day target
-- Weekly subtotals, running total
+- Weekly subtotals under each week row
+- Running total
 - Per-day highlighting: >8h (green), <8h (amber)
-- Keyboard navigation (Enter/Tab/Arrows)
+- Keyboard navigation (Enter/Tab/Arrows, Up/Down same weekday next/prev week)
+- Highlight today's cell
+- CSV Import/Export
+- Reset to current month
 - Dark mode toggle (persisted)
-- CSV import/export
 
-## Deploy on GitHub Pages
-1) Create/Use public repo `Timesheet_App`.
-2) Upload `index.html` to the **root**.
-3) If using *Deploy from a branch*: Settings → Pages → Branch `main` + Folder `/ (root)` → Save.
-4) Or add a GitHub Actions workflow at `.github/workflows/pages.yml` (see below).
-
-## Optional Actions workflow
-```
-name: Deploy to GitHub Pages
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Upload static site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-```
+Deployed on GitHub Pages using a single `index.html`.
+If you see a blank page, ensure the `<script type="text/babel" data-presets="react">` tag is present and use a cachebuster in the URL when testing.
