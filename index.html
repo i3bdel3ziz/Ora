@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Timesheet — Monthly Hours (V1.4.2)</title>
+  <title>Timesheet — Monthly Hours (V1.4.3)</title>
   <meta name="description" content="Timesheet: Sun–Thu workweek (Fri+Sat weekend), fixed 8h/day target, CSV/PDF export, trend chart, progress ring." />
   <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
   <!-- Tailwind CDN (warning about production is safe to ignore for GitHub Pages) -->
@@ -29,7 +29,7 @@
     function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
     const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const STORAGE_KEY = 'timesheet-v1.4.2';
+    const STORAGE_KEY = 'timesheet-v1.4.3';
 
     function TrendChart({ data, target }){
       const width = Math.max(260, data.length*14 + 40);
@@ -151,7 +151,7 @@
         document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }
 
-      // PDF Export (print window) - IMPORTANT: escape </script> inside HTML string
+      // PDF Export (print window) - IMPORTANT: do not include the literal closing tag for the outer script
       function exportPDF(){
         const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
         const style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}';
@@ -167,7 +167,7 @@
           + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
           + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
           + '</tbody></table>';
-        // Escape the closing script tag to avoid ending the outer <script> block
+        // Build a print script without ever writing the exact closing tag for the outer script
         const printScript = '<scr' + 'ipt>window.onload=()=>window.print()<\\/scr' + 'ipt>';
         const html = '<!doctype html><html><head><meta charset="utf-8"><title>Timesheet Report</title><style>'+style+'</style></head>'
           + '<body><h1>Timesheet Report — '+monthName+'</h1>'+summary
@@ -296,7 +296,7 @@
               </div>
             </div>
 
-            <footer className="text-xs text-gray-500 mt-6 text-center">V1.4.2 - Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</footer>
+            <footer className="text-xs text-gray-500 mt-6 text-center">V1.4.3 - Fixed Qatar weekend (Fri+Sat). Daily target fixed at 8 hours. Data stays in your browser.</footer>
           </div>
         </div>
       );
