@@ -27,7 +27,7 @@
     const { useEffect, useMemo, useState, useRef } = React;
     // Utilities
     function daysInMonth(year, monthIndex0) { return new Date(year, monthIndex0 + 1, 0).getDate(); }
-    function fmt(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+    function fmt(n) { return (<>Math.round(n * 100) / 100).toFixed(2); }
     function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
     const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const STORAGE_KEY = 'timesheet-v1.7';
@@ -41,7 +41,7 @@
       const barW = Math.max(6, innerW / Math.max(1,data.length) * 0.7);
       const step = innerW / Math.max(1,data.length);
       const ty = height - padB - innerH * clamp(target/maxY, 0, 1);
-      return (
+      return (<>
         <svg viewBox={"0 0 " + width + " " + height} className="w-full h-28">
           <line x1={padL} y1={ty} x2={width-padR} y2={ty} className="stroke-gray-400" strokeDasharray="4 3" />
           {data.map((d, idx)=>{
@@ -58,7 +58,7 @@
       const pct = target>0 ? clamp(actual/target,0,1) : 0;
       const size=120, stroke=12, r=(size-stroke)/2, c=2*Math.PI*r;
       const dash = c*pct;
-      return (
+      return (<>
         <svg viewBox={"0 0 " + size + " " + size} className="w-28 h-28">
           <circle cx={size/2} cy={size/2} r={r} strokeWidth={stroke} className="fill-none stroke-gray-200"/>
           <circle cx={size/2} cy={size/2} r={r} strokeWidth={stroke} className="fill-none stroke-indigo-600" strokeLinecap="round"
@@ -222,7 +222,7 @@
         d.sort((a,b)=>a.day-b.day);
         return d;
       },[rows, hoursByDay]);
-      return (
+      return (<>
         <div className="min-h-screen w-full">
           <div className="max-w-6xl mx-auto p-6">
             <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -306,12 +306,12 @@
                   const weekDaysCount = row.filter(Boolean).length || 1;
                   const weekSum = row.reduce((s, d) => s + (d ? (Number(hoursByDay[d])||0) : 0), 0);
                   const weekAvg = weekSum / weekDaysCount;
-                  return (
+                  return (<>
                     <div key={'row'+ri} className="grid gap-2" style={{gridTemplateColumns: 'repeat(' + row.length + ', minmax(0,1fr))'}}>
                       {row.map((dayNum, j) => {
                         const isLongCol = (j === longDay); // visual highlight by column index (Sun..Thu)
                         const highlight = isLongCol ? 'bg-indigo-50' : '';
-                        return (
+                        return (<>
                           <div key={'c'+j} className={'rounded-xl border p-2 ' + highlight}>
                             {dayNum ? (
                               <>

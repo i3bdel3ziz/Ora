@@ -1,8 +1,8 @@
-# Timesheet App — V1.7.4 (Fixed JSX comments)
+# Timesheet App — V1.7.5 (Fragment-wrapped return)
 
-- This build removes JSX-style comments ({/* ... */}) that caused Babel Standalone to throw a syntax error on GitHub Pages.
-- No feature changes from V1.7 full build.
+- Wraps the component `return` JSX in a React Fragment to fix "Adjacent JSX elements must be wrapped" error.
+- Keeps all prior fixes (no JSX comments).
 
 ## Deploy
 Upload `index.html` to your repo root (main branch), then open:
-`https://<your-username>.github.io/Timesheet_App/?_v=1.7.4`
+`https://<your-username>.github.io/Timesheet_App/?_v=1.7.5`

@@ -1,4 +1,4 @@
 # Changelog
 
-## 1.7.4 — 2025-09-05
-- Removed JSX-style comments to fix "Unexpected token, expected ','" in Babel Standalone.
+## 1.7.5 — 2025-09-05
+- Wrapped returned JSX with a fragment to resolve adjacent elements error.
