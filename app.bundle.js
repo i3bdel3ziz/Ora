@@ -4,7 +4,7 @@
   var h = React.createElement;
   var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
 
-  var STORAGE_KEY = 'timesheet-react-umd-1.8.2';
+  var STORAGE_KEY = 'timesheet-react-umd-1.8.3';
   var WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var DAILY_TARGET = 8;
 
@@ -12,8 +12,6 @@
   function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
   function isWeekendIndex(wd){ return wd===5 || wd===6; } // Fri+Sat
   function ymKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
-
-  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
   function ProgressRing(props){
     var actual = props.actual || 0, target = props.target || 1;
@@ -156,19 +154,6 @@
       });
     });
 
-    var alerts = [];
-    var now = new Date();
-    if (pct < 40 && (now.getDate() > 10) && (now.getMonth()===month && now.getFullYear()===year)){
-      alerts.push({type:'warn', text:'Progress this month is below 40%—consider a long-day or weekend catch-up.'});
-    }
-    rows.forEach(function(r,i){
-      var sum=0, n=0;
-      r.forEach(function(d){ if(d){ sum += Number(hoursByDay[d])||0; n++; } });
-      if(n && (sum/n) < 7){
-        alerts.push({type:'info', text:'Week '+(i+1)+' average is under 7h/day.'});
-      }
-    });
-
     function setHoliday(d){
       setHolidays(function(prev){
         var n={}; for (var k in prev) n[k]=prev[k];
@@ -209,7 +194,7 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function exportJSON(){
-      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.8.2-react-umd' };
+      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.8.3-react-umd' };
       var blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a'); a.href = url; a.download = "timesheet_backup_" + ymKey(year,month) + ".json";
@@ -260,8 +245,11 @@
       return 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?"';
     }
 
+    // UI
     return h('div', {className:'min-h-screen w-full'},
       h('div', {className:'max-w-7xl mx-auto p-6'},
+
+        // Header
         h('header', {className:'mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between'},
           h('div', {className:'flex items-center gap-2'},
             logoUrl ? h('img', {src:logoUrl, alt:'', className:'w-8 h-8 object-contain rounded hidden sm:block'}) : null,
@@ -287,16 +275,17 @@
             h('button', {onClick:function(){ var n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Reset')
           )
         ),
-        alerts.length? h('div', {className:'space-y-2 mb-3'},
-          alerts.map(function(a,i){ return h('div',{key:i, className:(a.type==='warn'?'bg-amber-100 text-amber-900':'bg-blue-100 text-blue-900')+' rounded-xl px-3 py-2 text-sm'}, a.text); })
-        ) : null,
+
+        // Actions
         h('div', {className:'flex flex-wrap gap-2 mb-3'},
-          h('button', {onClick:function(){fillAll();}, className:'px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90'}, 'Fill all'),
-          h('button', {onClick:function(){clearAll();}, className:'px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300'}, 'Clear all'),
-          h('button', {onClick:function(){exportCSV();}, className:'px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700'}, 'Export CSV'),
-          h('button', {onClick:function(){exportPDF();}, className:'px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700'}, 'Export PDF'),
-          h('button', {onClick:function(){exportJSON();}, className:'px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90'}, 'Backup JSON')
+          h('button', {onClick:fillAll, className:'px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90'}, 'Fill all'),
+          h('button', {onClick:clearAll, className:'px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300'}, 'Clear all'),
+          h('button', {onClick:exportCSV, className:'px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700'}, 'Export CSV'),
+          h('button', {onClick:exportPDF, className:'px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700'}, 'Export PDF'),
+          h('button', {onClick:exportJSON, className:'px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90'}, 'Backup JSON')
         ),
+
+        // Summary
         h('div', {className:'grid lg:grid-cols-3 gap-3 mb-4 items-stretch'},
           h('div', {className:'bg-white rounded-xl p-3'},
             h('div', {className:'text-sm text-gray-600'}, 'Target hours'),
@@ -317,14 +306,8 @@
             )
           )
         ),
-        h('div', {className:'bg-white rounded-2xl shadow p-4 mb-4'},
-          h('h3', {className:'font-semibold mb-2'}, 'Cumulative vs Target'),
-          h(LineChart, {data:cumulative})
-        ),
-        h('div', {className:'bg-white rounded-2xl shadow p-4 mb-4'},
-          h('h3', {className:'font-semibold mb-2'}, 'Heatmap — Daily hours (Sun–Thu)'),
-          h(Heatmap, {days: enteredDayList, getVal: function(d){ var v=hoursByDay[d]; return v==null? null : Number(v); }})
-        ),
+
+        // Grid (Daily entries)
         h('div', {className:'bg-white rounded-2xl shadow p-4'},
           h('div', {className:'flex items-center justify-between mb-3'},
             h('h3', {className:'font-semibold'}, 'Daily entries (Sun–Thu)'),
@@ -373,6 +356,18 @@
             })
           )
         ),
+
+        // Moved below Daily entries: charts & heatmap
+        h('div', {className:'bg-white rounded-2xl shadow p-4 mt-4 mb-4'},
+          h('h3', {className:'font-semibold mb-2'}, 'Cumulative vs Target'),
+          h(LineChart, {data:cumulative})
+        ),
+        h('div', {className:'bg-white rounded-2xl shadow p-4 mb-4'},
+          h('h3', {className:'font-semibold mb-2'}, 'Heatmap — Daily hours (Sun–Thu)'),
+          h(Heatmap, {days: enteredDayList, getVal: function(d){ var v=hoursByDay[d]; return v==null? null : Number(v); }})
+        ),
+
+        // AI + Insights (unchanged)
         h('div', {className:'grid lg:grid-cols-2 gap-4 mt-4'},
           h('div', {className:'bg-white rounded-2xl shadow p-4'},
             h('h3', {className:'font-semibold mb-2'}, 'AI Q&A (local)'),
@@ -389,7 +384,9 @@
             )
           )
         ),
-        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'V1.8.2 (React UMD) · Fri+Sat weekend · Daily target fixed at 8h · Heatmap & charts & insights'),
+
+        // Footer + mobile totals
+        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'V1.8.3 (React UMD) · Fri+Sat weekend · Daily target fixed at 8h · Heatmap & charts & insights'),
         h('div', {id:'totalsBar', className:'sm:hidden mt-3'},
           h('div', {className:'text-xs'}, 'Target: ', h('b', null, fmt(targetMonthlyHours)), 'h'),
           h('div', {className:'text-xs'}, 'Actual: ', h('b', null, fmt(actualMonthlyHours)), 'h'),
