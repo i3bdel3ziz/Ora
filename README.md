@@ -7,7 +7,9 @@
 ![Status](https://img.shields.io/badge/status-active-success.svg)
 
 > A lightweight, browser-based **timesheet tracker** for Sun–Thu workweeks.
+
 > Built with **React UMD** — no build tools, no backend, **just open in your browser**.  
+
 > Your data stays 100% **local** (saved in your browser storage).
 
 ---
