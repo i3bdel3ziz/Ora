@@ -1,4 +1,4 @@
-# ⏱️ TimeSheet — V1.8.3 
+# ⏱️ TimeSheet 
 
 ![Version](https://img.shields.io/badge/version-1.8.3-blue.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
 
-> A lightweight, browser-based **timesheet tracker** for Sun–Thu workweeks (Qatar-style Fri+Sat weekend).  
+> A lightweight, browser-based **timesheet tracker** for Sun–Thu workweeks.
 > Built with **React UMD** — no build tools, no backend, **just open in your browser**.  
 > Your data stays 100% **local** (saved in your browser storage).
 
