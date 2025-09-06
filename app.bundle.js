@@ -386,7 +386,7 @@
         ),
 
         // Footer + mobile totals
-        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'V1.8.3 (React UMD) · Fri+Sat weekend · Daily target fixed at 8h · Heatmap & charts & insights'),
+        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'Developed By: i3bdel3ziz ❤️'),
         h('div', {id:'totalsBar', className:'sm:hidden mt-3'},
           h('div', {className:'text-xs'}, 'Target: ', h('b', null, fmt(targetMonthlyHours)), 'h'),
           h('div', {className:'text-xs'}, 'Actual: ', h('b', null, fmt(actualMonthlyHours)), 'h'),
