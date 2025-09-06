@@ -1,4 +1,4 @@
-# ⏱️ TimeSheet — V1.8.3 (React UMD bundle)
+# ⏱️ TimeSheet — V1.8.3 
 
 ![Version](https://img.shields.io/badge/version-1.8.3-blue.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
@@ -32,11 +32,6 @@
 ✅ Branding → custom title & logo  
 ✅ Mobile sticky totals bar  
 
----
-
-## 📷 Screenshot Preview
-
-![TimeSheet V1.8.3 Demo](timesheet_v1_8_3_mockup.png)
 
 ---
 
