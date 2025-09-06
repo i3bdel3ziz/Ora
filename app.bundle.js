@@ -4,14 +4,16 @@
   var h = React.createElement;
   var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
 
-  var STORAGE_KEY = 'timesheet-react-umd-1.8-complete';
+  var STORAGE_KEY = 'timesheet-react-umd-1.8.2';
   var WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var DAILY_TARGET = 8;
 
   function daysInMonth(year, monthIndex0){ return new Date(year, monthIndex0+1, 0).getDate(); }
   function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
-  function isWeekendIndex(wd){ return wd===5 || wd===6; }
+  function isWeekendIndex(wd){ return wd===5 || wd===6; } // Fri+Sat
   function ymKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
+
+  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
   function ProgressRing(props){
     var actual = props.actual || 0, target = props.target || 1;
@@ -26,35 +28,76 @@
     );
   }
 
+  function LineChart(props){
+    var data = props.data || [];
+    var w = 420, hgt = 120, pad=24;
+    var maxY = 1;
+    for (var i=0;i<data.length;i++){ maxY = Math.max(maxY, data[i].a, data[i].t); }
+    var maxX = data.length || 1;
+    function sx(x){ return pad + (x-1)/(maxX-1||1)*(w-2*pad); }
+    function sy(y){ return hgt-pad - (y/maxY)*(hgt-2*pad); }
+    function pathFor(field){
+      if(!data.length) return '';
+      var d = 'M '+sx(1)+' '+sy(data[0][field]);
+      for (var i=2;i<=data.length;i++){ d += ' L '+sx(i)+' '+sy(data[i-1][field]); }
+      return d;
+    }
+    return h('svg', {viewBox:'0 0 '+w+' '+hgt, className:'w-full h-[140px]'},
+      h('line', {x1:pad, y1:hgt-pad, x2:w-pad, y2:hgt-pad, className:'stroke-gray-300'}),
+      h('line', {x1:pad, y1:pad, x2:pad, y2:hgt-pad, className:'stroke-gray-300'}),
+      h('path', {d:pathFor('t'), className:'fill-none', style:{stroke:'#818cf8', strokeDasharray:'4 4', strokeWidth:2}}),
+      h('path', {d:pathFor('a'), className:'fill-none', style:{stroke:'#059669', strokeWidth:2}})
+    );
+  }
+
+  function Heatmap(props){
+    var days = props.days, getVal = props.getVal;
+    var cols = 7, cell=16, gap=4, pad=6;
+    var rows = Math.ceil(days.length/cols);
+    var w = cols*cell + (cols-1)*gap + pad*2;
+    var hgt = rows*cell + (rows-1)*gap + pad*2;
+    function color(v){
+      if(v==null) return '#e5e7eb';
+      var p = Math.max(0, Math.min(1, v/8));
+      var g = Math.round(255*(1-p)), r = Math.round(255*(1-p*0.2));
+      return 'rgb('+r+','+g+','+200+')';
+    }
+    var rects = [];
+    for (var i=0;i<days.length;i++){
+      var d = days[i];
+      var row = Math.floor(i/cols), col=i%cols;
+      rects.push(h('rect', {key:i, x:pad+col*(cell+gap), y:pad+row*(cell+gap), width:cell, height:cell, rx:3, ry:3,
+        fill: color(getVal(d)) }));
+    }
+    return h('svg', {viewBox:'0 0 '+w+' '+hgt, className:'w-full h-[120px]'}, rects);
+  }
+
   function App(){
     var _titleInit='TimeSheet', _logoInit='';
     try { _titleInit = localStorage.getItem('wl_title') || 'TimeSheet'; } catch(e){}
     try { _logoInit = localStorage.getItem('wl_logo') || ''; } catch(e){}
 
     var today = new Date();
-    var _raw = {}; try { var raw = localStorage.getItem(STORAGE_KEY); _raw = raw? JSON.parse(raw) : {}; } catch(e){ _raw={}; }
+    var [appTitle,setAppTitle] = React.useState(_titleInit);
+    var [logoUrl,setLogoUrl] = React.useState(_logoInit);
+    var [year,setYear] = React.useState(today.getFullYear());
+    var [month,setMonth] = React.useState(today.getMonth());
 
-    var _a = useState(_titleInit), appTitle=_a[0], setAppTitle=_a[1];
-    var _b = useState(_logoInit), logoUrl=_b[0], setLogoUrl=_b[1];
-    var _c = useState(today.getFullYear()), year=_c[0], setYear=_c[1];
-    var _d = useState(today.getMonth()), month=_d[0], setMonth=_d[1];
-    var _e = useState(_raw), store=_e[0], setStore=_e[1];
-
+    var storeInit = {}; try { var raw = localStorage.getItem(STORAGE_KEY); storeInit = raw? JSON.parse(raw) : {}; } catch(e){ storeInit={}; }
+    var [store,setStore] = React.useState(storeInit);
     var ym = ymKey(year, month);
-    var monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0 };
-    var _f = useState(monthState.hoursByDay || {}), hoursByDay=_f[0], setHoursByDay=_f[1];
-    var _g = useState(monthState.holidays || {}), holidays=_g[0], setHolidays=_g[1];
-    var _h = useState(typeof monthState.longDay==='number'? monthState.longDay : 0), longDay=_h[0], setLongDay=_h[1];
+    var monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0, notesByDay:{} };
+    var [hoursByDay,setHoursByDay] = React.useState(monthState.hoursByDay || {});
+    var [holidays,setHolidays] = React.useState(monthState.holidays || {});
+    var [longDay,setLongDay] = React.useState(typeof monthState.longDay==='number' ? monthState.longDay : 0);
+    var [notesByDay,setNotesByDay] = React.useState(monthState.notesByDay || {});
 
-    useEffect(function(){ try{ localStorage.setItem('wl_title', appTitle); }catch(e){} }, [appTitle]);
-    useEffect(function(){ try{ localStorage.setItem('wl_logo', logoUrl); }catch(e){} }, [logoUrl]);
-
-    useEffect(function(){
+    React.useEffect(function(){
       var next = {}; for (var k in store) next[k]=store[k];
-      next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay };
+      next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, notesByDay:notesByDay };
       setStore(next);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch(e){}
-    }, [ym, hoursByDay, holidays, longDay]);
+    }, [ym, hoursByDay, holidays, longDay, notesByDay]);
 
     var totalDays = daysInMonth(year, month);
     function buildRows(){
@@ -69,26 +112,62 @@
         if (newWeek){ out.push(cur); cur=[null,null,null,null,null,null,null]; }
       }
       if (cur.some(function(c){return c!==null;})) out.push(cur);
-      return out.map(function(row){ return [row[0],row[1],row[2],row[3],row[4]]; });
+      return out.map(function(r){ return [r[0],r[1],r[2],r[3],r[4]]; });
     }
-    var rows = useMemo(buildRows, [year,month,totalDays]);
+    var rows = React.useMemo(buildRows, [year,month,totalDays]);
 
-    var workingDays = useMemo(function(){ return rows.reduce(function(a,r){ return a + r.filter(Boolean).length; },0); }, [rows]);
-    var targetMonthlyHours = workingDays * DAILY_TARGET;
-    var actualMonthlyHours = useMemo(function(){
-      var sum = 0; Object.keys(hoursByDay).forEach(function(k){ sum += Number(hoursByDay[k])||0; }); return sum;
+    var workingDays = React.useMemo(function(){ return rows.reduce(function(a,r){ return a + r.filter(Boolean).length; },0); }, [rows]);
+    var targetMonthlyHours = workingDays*DAILY_TARGET;
+    var actualMonthlyHours = React.useMemo(function(){
+      var s=0; Object.keys(hoursByDay).forEach(function(k){ s += Number(hoursByDay[k])||0; }); return s;
     }, [hoursByDay]);
     var diff = actualMonthlyHours - targetMonthlyHours;
     var pct = targetMonthlyHours>0 ? (actualMonthlyHours/targetMonthlyHours)*100 : 0;
-    var monthLabel = useMemo(function(){ return new Date(year,month,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }, [year,month]);
+    var monthLabel = React.useMemo(function(){ return new Date(year,month,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }, [year,month]);
 
-    var enteredDays = useMemo(function(){
-      var n=0; rows.forEach(function(r){ r.forEach(function(d){ if(d) n++; }); }); return n;
+    var enteredDayList = React.useMemo(function(){
+      var arr=[]; rows.forEach(function(r){ r.forEach(function(d){ if(d) arr.push(d); }); }); return arr;
     }, [rows]);
-    var avgPerEntered = enteredDays? (actualMonthlyHours/enteredDays) : 0;
-    var remainingWorking = workingDays - enteredDays;
+    var enteredDaysCount = enteredDayList.length;
+    var avgPerEntered = enteredDaysCount? (actualMonthlyHours/enteredDaysCount) : 0;
+    var remainingWorking = workingDays - enteredDaysCount;
     var forecastTotal = actualMonthlyHours + avgPerEntered * remainingWorking;
     var forecastDiff = forecastTotal - targetMonthlyHours;
+
+    var weekdaySums = [0,0,0,0,0], weekdayCounts=[0,0,0,0,0];
+    enteredDayList.forEach(function(d){
+      var wd = new Date(year,month,d).getDay();
+      var idx = wd===0?0:wd;
+      var val = Number(hoursByDay[d])||0;
+      weekdaySums[idx]+=val; weekdayCounts[idx]+=1;
+    });
+    var weekdayAvgs = weekdaySums.map(function(s,i){ return weekdayCounts[i]? (s/weekdayCounts[i]) : 0; });
+
+    var cumulative = [];
+    var cum=0, targetCum=0, cIdx=0;
+    rows.forEach(function(r){
+      r.forEach(function(d){
+        if(!d) return;
+        cIdx++;
+        var val = Number(hoursByDay[d])||0;
+        cum += val;
+        targetCum += DAILY_TARGET;
+        cumulative.push({x:cIdx, a:cum, t:targetCum});
+      });
+    });
+
+    var alerts = [];
+    var now = new Date();
+    if (pct < 40 && (now.getDate() > 10) && (now.getMonth()===month && now.getFullYear()===year)){
+      alerts.push({type:'warn', text:'Progress this month is below 40%—consider a long-day or weekend catch-up.'});
+    }
+    rows.forEach(function(r,i){
+      var sum=0, n=0;
+      r.forEach(function(d){ if(d){ sum += Number(hoursByDay[d])||0; n++; } });
+      if(n && (sum/n) < 7){
+        alerts.push({type:'info', text:'Week '+(i+1)+' average is under 7h/day.'});
+      }
+    });
 
     function setHoliday(d){
       setHolidays(function(prev){
@@ -102,9 +181,8 @@
         return n;
       });
     }
-
     function fillAll(){
-      var next = {}; for (var k in hoursByDay) next[k]=hoursByDay[k];
+      var next={}; for (var k in hoursByDay) next[k]=hoursByDay[k];
       rows.forEach(function(row){
         row.forEach(function(d,j){
           if(!d) return;
@@ -127,14 +205,14 @@
       }
       var blob = new Blob([lines.join(String.fromCharCode(10))], { type:'text/csv;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
-      var a = document.createElement('a'); a.href=url; a.download="timesheet_"+ymKey(year,month)+".csv";
+      var a = document.createElement('a'); a.href = url; a.download = "timesheet_" + ymKey(year,month) + ".csv";
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function exportJSON(){
-      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.8-react-umd-complete' };
+      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.8.2-react-umd' };
       var blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
-      var a = document.createElement('a'); a.href=url; a.download="timesheet_backup_"+ymKey(year,month)+".json";
+      var a = document.createElement('a'); a.href = url; a.download = "timesheet_backup_" + ymKey(year,month) + ".json";
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function exportPDF(){
@@ -170,7 +248,17 @@
       }
       return arr;
     }
-    var jumpOptions = useMemo(monthJumpOptions, []);
+    var jumpOptions = React.useMemo(monthJumpOptions, []);
+
+    function answerQuery(q){
+      q = (q||'').toLowerCase();
+      if(q.indexOf('overtime')>=0 || q.indexOf('exceed')>=0) return 'Overtime this month: ' + fmt(Math.max(0,diff)) + ' h';
+      if(q.indexOf('short')>=0 || q.indexOf('deficit')>=0) return 'Shortage this month: ' + fmt(Math.max(0,-diff)) + ' h';
+      if(q.indexOf('total')>=0) return 'Total actual hours: ' + fmt(actualMonthlyHours) + ' h';
+      if(q.indexOf('target')>=0) return 'Target hours this month: ' + fmt(targetMonthlyHours) + ' h';
+      if(q.indexOf('forecast')>=0 || q.indexOf('predict')>=0) return 'Projected end-of-month: ' + fmt(forecastTotal) + ' h (' + (forecastDiff>=0?'exceed':'shortage') + ' ' + fmt(Math.abs(forecastDiff)) + ' h)';
+      return 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?"';
+    }
 
     return h('div', {className:'min-h-screen w-full'},
       h('div', {className:'max-w-7xl mx-auto p-6'},
@@ -199,28 +287,17 @@
             h('button', {onClick:function(){ var n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Reset')
           )
         ),
+        alerts.length? h('div', {className:'space-y-2 mb-3'},
+          alerts.map(function(a,i){ return h('div',{key:i, className:(a.type==='warn'?'bg-amber-100 text-amber-900':'bg-blue-100 text-blue-900')+' rounded-xl px-3 py-2 text-sm'}, a.text); })
+        ) : null,
         h('div', {className:'flex flex-wrap gap-2 mb-3'},
-          h('button', {onClick:fillAll, className:'px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90'}, 'Fill all'),
-          h('button', {onClick:clearAll, className:'px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300'}, 'Clear all'),
-          h('button', {onClick:exportCSV, className:'px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700'}, 'Export CSV'),
-          h('button', {onClick:exportPDF, className:'px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700'}, 'Export PDF'),
-          h('button', {onClick:exportJSON, className:'px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90'}, 'Backup JSON'),
-          h('label', {className:'px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer'}, 'Restore JSON',
-            h('input', {type:'file', accept:'application/json', className:'hidden', onChange:function(e){
-              var f=e.target.files && e.target.files[0]; if(!f) return;
-              var reader=new FileReader(); reader.onload=function(){
-                try{
-                  var obj=JSON.parse(reader.result);
-                  if(obj && obj.store){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.store)); location.reload(); }
-                }catch(err){ alert('Invalid JSON'); }
-              }; reader.readAsText(f); e.target.value='';
-            }})
-          ),
-          h('label', {className:'px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer'}, 'Set Logo URL',
-            h('input', {type:'url', className:'hidden', onChange:function(e){ setLogoUrl(e.target.value); }})
-          )
+          h('button', {onClick:function(){fillAll();}, className:'px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90'}, 'Fill all'),
+          h('button', {onClick:function(){clearAll();}, className:'px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300'}, 'Clear all'),
+          h('button', {onClick:function(){exportCSV();}, className:'px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700'}, 'Export CSV'),
+          h('button', {onClick:function(){exportPDF();}, className:'px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700'}, 'Export PDF'),
+          h('button', {onClick:function(){exportJSON();}, className:'px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90'}, 'Backup JSON')
         ),
-        h('div', {className:'grid sm:grid-cols-3 gap-3 mb-4 items-stretch'},
+        h('div', {className:'grid lg:grid-cols-3 gap-3 mb-4 items-stretch'},
           h('div', {className:'bg-white rounded-xl p-3'},
             h('div', {className:'text-sm text-gray-600'}, 'Target hours'),
             h('div', {className:'text-xl font-bold'}, fmt(targetMonthlyHours)),
@@ -239,6 +316,14 @@
               h('div', {className:'text-xs opacity-80 mt-1'}, 'Forecast: ', fmt(forecastTotal), ' h (', (forecastDiff>=0?'exceed':'shortage'), ' ', fmt(Math.abs(forecastDiff)), ' h)')
             )
           )
+        ),
+        h('div', {className:'bg-white rounded-2xl shadow p-4 mb-4'},
+          h('h3', {className:'font-semibold mb-2'}, 'Cumulative vs Target'),
+          h(LineChart, {data:cumulative})
+        ),
+        h('div', {className:'bg-white rounded-2xl shadow p-4 mb-4'},
+          h('h3', {className:'font-semibold mb-2'}, 'Heatmap — Daily hours (Sun–Thu)'),
+          h(Heatmap, {days: enteredDayList, getVal: function(d){ var v=hoursByDay[d]; return v==null? null : Number(v); }})
         ),
         h('div', {className:'bg-white rounded-2xl shadow p-4'},
           h('div', {className:'flex items-center justify-between mb-3'},
@@ -288,7 +373,23 @@
             })
           )
         ),
-        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'V1.8 (React UMD, complete+exports) · Fri+Sat weekend · Daily target fixed at 8h'),
+        h('div', {className:'grid lg:grid-cols-2 gap-4 mt-4'},
+          h('div', {className:'bg-white rounded-2xl shadow p-4'},
+            h('h3', {className:'font-semibold mb-2'}, 'AI Q&A (local)'),
+            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?"'),
+            h('input', {id:'qa', className:'rounded border px-2 py-1 w-full mb-2', placeholder:'Ask a question...',
+              onKeyDown:function(e){ if(e.key==='Enter'){ var ans = answerQuery(e.target.value); var el = document.getElementById('qa_out'); if(el) el.textContent = ans; } } }),
+            h('div', {id:'qa_out', className:'text-sm bg-gray-50 rounded p-2 min-h-[36px]'})
+          ),
+          h('div', {className:'bg-white rounded-2xl shadow p-4'},
+            h('h3', {className:'font-semibold mb-2'}, 'Insights'),
+            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Monthly summary: You worked ', fmt(actualMonthlyHours), 'h out of ', fmt(targetMonthlyHours), 'h. Forecast indicates ', (forecastDiff>=0?'exceed':'shortage'), ' by ', fmt(Math.abs(forecastDiff)), 'h.'),
+            h('div', {className:'text-xs text-gray-500'}, 'Productivity by weekday (avg h): ',
+              WEEKDAYS.slice(0,5).map(function(wk,i){ return h('span', {key:i, className:'mr-2'}, wk, ': ', fmt(weekdayAvgs[i]||0)); })
+            )
+          )
+        ),
+        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'V1.8.2 (React UMD) · Fri+Sat weekend · Daily target fixed at 8h · Heatmap & charts & insights'),
         h('div', {id:'totalsBar', className:'sm:hidden mt-3'},
           h('div', {className:'text-xs'}, 'Target: ', h('b', null, fmt(targetMonthlyHours)), 'h'),
           h('div', {className:'text-xs'}, 'Actual: ', h('b', null, fmt(actualMonthlyHours)), 'h'),

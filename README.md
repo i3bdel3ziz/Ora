@@ -1,11 +1,9 @@
-# TimeSheet — V1.8 (React UMD bundle, complete)
-- React UMD (no JSX/Babel at runtime).
-- Fri+Sat weekend; Sun–Thu working days.
-- Daily target fixed at 8h.
-- Long Day selector (Sun–Thu) uses 9.5h in Fill all.
-- Holidays toggle (H) sets 8h by default.
-- Fill all / Clear all.
-- Export CSV / Export PDF / Backup & Restore JSON.
-- Month/year navigation + Jump selector.
-- White-label app title & logo URL.
-- Summary cards + mobile totals.
+# TimeSheet — V1.8.2 (React UMD bundle, insights build)
+**New in 1.8.2**
+- Heatmap for current month (Sun–Thu working days).
+- Cumulative line chart vs target.
+- Alerts for low progress & weak weeks.
+- AI-ish Q&A panel (overtime, shortage, total, target, forecast).
+- Insights card with monthly summary & forecast.
+- Productivity insights (average hours by weekday).
+- Hooks for notes (notesByDay persisted in backup JSON; UI hidden for now).
