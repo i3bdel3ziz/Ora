@@ -1,2 +1,2 @@
-# TimeSheet — V1.8 (No-Babel stable)
-This build avoids inline Babel/JSX. Vanilla JS app with the same core features.
+# TimeSheet — V1.8 (React UMD bundle)
+Precompiled React (UMD, no JSX in browser). Includes Fri+Sat weekend, 8h target, long day selector, holidays, exports, AI Q&A.

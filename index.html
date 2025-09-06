@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TimeSheet</title>
   <link rel="icon" href="favicon.ico" />
-  <meta name="description" content="TimeSheet: Sun–Thu week (Fri+Sat weekend). Simple monthly hours tracker with holidays, long day, exports." />
+  <meta name="description" content="TimeSheet: Sun–Thu week (Fri+Sat weekend). Monthly hours tracker with holidays, long day, exports." />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media (max-width: 640px){
@@ -13,83 +13,17 @@
       body{padding-bottom:58px;}
     }
     .cell-today{outline:2px solid #4f46e5; outline-offset: 0; border-radius: .75rem;}
+    .chip{font-size:10px;padding:.125rem .375rem;border-radius:.375rem;background:#eef2ff;color:#3730a3}
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-  <div id="app" class="min-h-screen w-full">
-    <div class="max-w-7xl mx-auto p-6">
-      <header class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div class="flex items-center gap-2">
-          <img id="wl_logo" class="w-8 h-8 object-contain rounded hidden sm:block" alt=""/>
-          <input id="appTitle" class="text-2xl font-bold bg-transparent w-[320px]" value="TimeSheet" />
-        </div>
-        <div class="flex flex-wrap gap-2 items-center">
-          <button id="prevYear" class="px-2 py-1 rounded-lg bg-gray-200">« Year</button>
-          <button id="prevMonth" class="px-2 py-1 rounded-lg bg-gray-200">◀</button>
-          <h1 id="monthLabel" class="text-xl font-semibold min-w-[180px] text-center">—</h1>
-          <button id="nextMonth" class="px-2 py-1 rounded-lg bg-gray-200">▶</button>
-          <button id="nextYear" class="px-2 py-1 rounded-lg bg-gray-200">Year »</button>
-          <label class="text-sm ml-2">Jump
-            <select id="jump" class="ml-2 rounded-lg border px-2 py-1 bg-white"></select>
-          </label>
-          <button id="resetToday" class="px-2 py-1 rounded-lg bg-gray-200">Reset</button>
-        </div>
-      </header>
+  <div id="root"></div>
 
-      <div class="flex flex-wrap gap-2 mb-3">
-        <button id="fillAll" class="px-3 py-2 rounded-xl bg-gray-900 text-white hover:opacity-90">Fill all</button>
-        <button id="clearAll" class="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300">Clear all</button>
-        <button id="exportCSV" class="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700">Export CSV</button>
-        <button id="exportPDF" class="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Export PDF</button>
-        <button id="backupJSON" class="px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90">Backup JSON</button>
-        <label class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
-          Restore JSON
-          <input id="restoreFile" type="file" accept="application/json" class="hidden"/>
-        </label>
-        <label class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
-          Set Logo URL
-          <input id="logoUrl" type="url" class="hidden"/>
-        </label>
-      </div>
+  <!-- React UMD (production) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-      <div class="grid sm:grid-cols-3 gap-3 mb-4 items-stretch">
-        <div class="bg-white rounded-xl p-3">
-          <div class="text-sm text-gray-600">Target hours</div>
-          <div id="targetHours" class="text-xl font-bold">0.00</div>
-          <div class="text-xs text-gray-500 mt-1">Working days × 8.00 h</div>
-        </div>
-        <div class="bg-white rounded-xl p-3">
-          <div class="text-sm text-gray-600">Actual hours</div>
-          <div id="actualHours" class="text-xl font-bold">0.00</div>
-          <div id="completion" class="text-xs text-gray-500 mt-1">Completion: 0.00%</div>
-        </div>
-        <div class="rounded-xl p-3 bg-white flex items-center gap-3">
-          <div>
-            <div id="diffLabel" class="text-sm font-semibold">—</div>
-            <div id="diffValue" class="text-xl font-bold">0.00 h</div>
-            <div id="forecast" class="text-xs opacity-80 mt-1">Forecast: —</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold">Daily entries (Sun–Thu)</h3>
-          <div class="text-xs text-gray-500">Toggle H = holiday (sets 8h). Long day shows 9.5h.</div>
-        </div>
-        <div id="weeks" class="grid gap-3"></div>
-      </div>
-
-      <footer class="text-xs text-gray-500 mt-6 text-center">V1.8-no-babel · Fri+Sat weekend. Daily target fixed at 8 hours. Data stays in your browser.</footer>
-
-      <div id="totalsBar" class="sm:hidden mt-3">
-        <div class="text-xs">Target: <b id="barTarget">0.00</b>h</div>
-        <div class="text-xs">Actual: <b id="barActual">0.00</b>h</div>
-        <div class="text-xs"><span id="barDiffType">—</span>: <b id="barDiffVal">0.00</b>h</div>
-      </div>
-    </div>
-  </div>
-
-  <script src="app.min.js"></script>
+  <!-- Precompiled, no JSX -->
+  <script src="app.bundle.js"></script>
 </body>
 </html>
