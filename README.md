@@ -1,2 +1,11 @@
-# TimeSheet — V1.8 (React UMD bundle)
-Precompiled React (UMD, no JSX in browser). Includes Fri+Sat weekend, 8h target, long day selector, holidays, exports, AI Q&A.
+# TimeSheet — V1.8 (React UMD bundle, complete)
+- React UMD (no JSX/Babel at runtime).
+- Fri+Sat weekend; Sun–Thu working days.
+- Daily target fixed at 8h.
+- Long Day selector (Sun–Thu) uses 9.5h in Fill all.
+- Holidays toggle (H) sets 8h by default.
+- Fill all / Clear all.
+- Export CSV / Export PDF / Backup & Restore JSON.
+- Month/year navigation + Jump selector.
+- White-label app title & logo URL.
+- Summary cards + mobile totals.
