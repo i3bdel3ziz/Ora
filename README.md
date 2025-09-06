@@ -1,4 +1,4 @@
-# ⏱️ TimeSheet 
+# ⏱️ Ora 
 
 ![Version](https://img.shields.io/badge/version-1.8.3-blue.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
