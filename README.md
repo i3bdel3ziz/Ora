@@ -40,41 +40,43 @@
 - **Exports**  
   Export to CSV, Excel, PDF, JSON (backup/restore).
 ---
-## 📌 Timeline releases
 
-V1.8 — Insights & Visualization
+## 📌 Release Timeline
 
-📊 Bringing intelligence & visuals
-	•	Heatmap for daily hours (Sun–Thu)
-	•	Cumulative vs Target chart
-	•	Productivity insights (weekday averages)
-	•	AI Q&A panel (local queries)
-	•	Monthly summary + forecast
-	•	In-app alerts for low progress (removed in 1.8.3 for clarity)
+---
 
-⸻
+### **V1.8**
+📊 *Bringing intelligence & visuals*  
+- Heatmap for daily hours (Sun–Thu)  
+- Cumulative vs Target chart  
+- Productivity insights (weekday averages)  
+- AI Q&A panel (local queries)  
+- Monthly summary + forecast  
+- In-app alerts for low progress (removed in 1.8.3 for clarity)  
 
-V1.7— Power Tools
+---
 
-🛠️ Projections & automation
-	•	Holiday toggle (auto 8h)
-	•	Long-day option (9.5h)
-	•	Compact exports (CSV/PDF)
-	•	Charts section introduced
-	•	Data restore/import (JSON backup)
-	•	Mobile sticky totals bar
+### **V1.7**
+🛠️ *Projections & automation*  
+- Holiday toggle (auto 8h)  
+- Long-day option (9.5h)  
+- Compact exports (CSV/PDF)  
+- Charts section introduced  
+- Data restore/import (JSON backup)  
+- Mobile sticky totals bar  
 
-⸻
+---
 
-V1.6 and below — Foundations
+### **V1.6 and below**
+🏗️ *Core functionality built*  
+- Sun–Thu workweek (Fri+Sat weekends excluded)  
+- Daily entries grid (8h/day default)  
+- Fill all / Clear all buttons  
+- Shortage/exceed calculator (with HH:MM support)  
+- Target vs Actual summary  
+- LocalStorage persistence (data saved in browser)  
 
-🏗️ Core functionality built
-	•	Sun–Thu workweek (Fri+Sat weekends excluded)
-	•	Daily entries grid (8h/day default)
-	•	Fill all / Clear all buttons
-	•	Shortage/exceed calculator (with HH:MM support)
-	•	Target vs Actual summary
-	•	LocalStorage persistence (data saved in browser)
+---
 
 
 ---
