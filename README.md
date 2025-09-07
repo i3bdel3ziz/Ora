@@ -8,6 +8,7 @@
 ![GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-222?logo=github&logoColor=white)
 ![Repo Size](https://img.shields.io/github/repo-size/i3bdel3ziz/Timesheet_App)
 ![Last Commit](https://img.shields.io/github/last-commit/i3bdel3ziz/Timesheet_App)
+![Made with Love](https://img.shields.io/badge/made%20with-❤️-red.svg)
 
 **ORA** is a lightweight time-tracking and hours management app designed for Sun–Thu working weeks (Fri+Sat weekend). It helps you manage daily entries, track shortages/exceeding hours, and visualize your month with smart insights.
 
