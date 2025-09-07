@@ -1,12 +1,8 @@
-## 1.8.3
-- Removed alerts for low progress and weak weeks.
-- Moved **Cumulative vs Target** and **Heatmap — Daily hours (Sun–Thu)** sections below the **Daily entries (Sun–Thu)** grid.
-- Footer now displays **V1.8.3 (React UMD)**.
-
-## 1.8.2
-- Added heatmap for current month.
-- Added cumulative line chart vs target.
-- Added AI Q&A panel (offline answers).
-- Added insights summary + weekday productivity averages.
-- Added in-app alerts for low progress and weak weeks (removed in 1.8.3).
-- Added hooks for notes persistence.
+## 1.9 (Preview)
+- Added weekly summary cards.
+- Added editable holiday names (persist + export).
+- Added weekly stacked bar + rolling-average line on cumulative chart.
+- Added goal projection calculator.
+- Added overtime tracker.
+- Expanded AI Q&A intents (remaining, best weekday, predictive forecast).
+- Added compact mode and keyboard shortcuts.

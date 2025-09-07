@@ -4,7 +4,7 @@
   var h = React.createElement;
   var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
 
-  var STORAGE_KEY = 'timesheet-react-umd-1.8.3';
+  var STORAGE_KEY = 'timesheet-react-umd-1.9';
   var WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var DAILY_TARGET = 8;
 
@@ -13,6 +13,7 @@
   function isWeekendIndex(wd){ return wd===5 || wd===6; } // Fri+Sat
   function ymKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
 
+  // Charts
   function ProgressRing(props){
     var actual = props.actual || 0, target = props.target || 1;
     var pct = target>0 ? Math.max(0, Math.min(1, actual/target)) : 0;
@@ -25,12 +26,11 @@
       h('text', {x:'50%', y:'50%', dominantBaseline:'middle', textAnchor:'middle', className:'fill-current text-sm'}, Math.round(pct*100)+'%')
     );
   }
-
   function LineChart(props){
     var data = props.data || [];
     var w = 420, hgt = 120, pad=24;
     var maxY = 1;
-    for (var i=0;i<data.length;i++){ maxY = Math.max(maxY, data[i].a, data[i].t); }
+    for (var i=0;i<data.length;i++){ maxY = Math.max(maxY, data[i].a||0, data[i].t||0, data[i].avg||0); }
     var maxX = data.length || 1;
     function sx(x){ return pad + (x-1)/(maxX-1||1)*(w-2*pad); }
     function sy(y){ return hgt-pad - (y/maxY)*(hgt-2*pad); }
@@ -44,30 +44,34 @@
       h('line', {x1:pad, y1:hgt-pad, x2:w-pad, y2:hgt-pad, className:'stroke-gray-300'}),
       h('line', {x1:pad, y1:pad, x2:pad, y2:hgt-pad, className:'stroke-gray-300'}),
       h('path', {d:pathFor('t'), className:'fill-none', style:{stroke:'#818cf8', strokeDasharray:'4 4', strokeWidth:2}}),
-      h('path', {d:pathFor('a'), className:'fill-none', style:{stroke:'#059669', strokeWidth:2}})
+      h('path', {d:pathFor('a'), className:'fill-none', style:{stroke:'#059669', strokeWidth:2}}),
+      data[0] && data[0].avg!=null ? h('path', {d:pathFor('avg'), className:'fill-none', style:{stroke:'#6b7280', strokeDasharray:'2 3', strokeWidth:2}}) : null
     );
   }
-
-  function Heatmap(props){
-    var days = props.days, getVal = props.getVal;
-    var cols = 7, cell=16, gap=4, pad=6;
-    var rows = Math.ceil(days.length/cols);
-    var w = cols*cell + (cols-1)*gap + pad*2;
-    var hgt = rows*cell + (rows-1)*gap + pad*2;
-    function color(v){
-      if(v==null) return '#e5e7eb';
-      var p = Math.max(0, Math.min(1, v/8));
-      var g = Math.round(255*(1-p)), r = Math.round(255*(1-p*0.2));
-      return 'rgb('+r+','+g+','+200+')';
+  function WeeklyStackedBar(props){
+    var weeks = props.weeks || []; // [{week, target, actual}]
+    var w = 420, hgt = 140, pad=28, barW=24, gap=18;
+    var maxY = 1;
+    for (var i=0;i<weeks.length;i++){ maxY = Math.max(maxY, weeks[i].target, weeks[i].actual); }
+    function sx(i){ return pad + i*(barW+gap); }
+    function sy(y){ return hgt-pad - (y/maxY)*(hgt-2*pad); }
+    var bars = [];
+    for (var i=0;i<weeks.length;i++){
+      var wk = weeks[i];
+      var x = sx(i);
+      var yT = sy(wk.target), hT = (hgt-pad) - yT;
+      var yA = sy(wk.actual), hA = (hgt-pad) - yA;
+      bars.push(
+        h('rect', {key:'t'+i, x:x, y:yT, width:barW, height:hT, fill:'#c7d2fe'}),
+        h('rect', {key:'a'+i, x:x, y:yA, width:barW, height:hA, fill:'#34d399', opacity:0.9})
+      );
+      bars.push(h('text',{key:'lbl'+i, x:x+barW/2, y:hgt-6, textAnchor:'middle', className:'fill-gray-700 text-[10px]'}, 'W'+(i+1)));
     }
-    var rects = [];
-    for (var i=0;i<days.length;i++){
-      var d = days[i];
-      var row = Math.floor(i/cols), col=i%cols;
-      rects.push(h('rect', {key:i, x:pad+col*(cell+gap), y:pad+row*(cell+gap), width:cell, height:cell, rx:3, ry:3,
-        fill: color(getVal(d)) }));
-    }
-    return h('svg', {viewBox:'0 0 '+w+' '+hgt, className:'w-full h-[120px]'}, rects);
+    return h('svg', {viewBox:'0 0 '+w+' '+hgt, className:'w-full h-[160px]'}, 
+      h('line', {x1:pad, y1:hgt-pad, x2:w-pad, y2:hgt-pad, className:'stroke-gray-300'}),
+      h('line', {x1:pad, y1:pad, x2:pad, y2:hgt-pad, className:'stroke-gray-300'}),
+      bars
+    );
   }
 
   function App(){
@@ -80,22 +84,25 @@
     var [logoUrl,setLogoUrl] = React.useState(_logoInit);
     var [year,setYear] = React.useState(today.getFullYear());
     var [month,setMonth] = React.useState(today.getMonth());
+    var [compact,setCompact] = React.useState(false);
 
     var storeInit = {}; try { var raw = localStorage.getItem(STORAGE_KEY); storeInit = raw? JSON.parse(raw) : {}; } catch(e){ storeInit={}; }
     var [store,setStore] = React.useState(storeInit);
     var ym = ymKey(year, month);
-    var monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0, notesByDay:{} };
+    var monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0, holidayNames:{}, notesByDay:{} };
     var [hoursByDay,setHoursByDay] = React.useState(monthState.hoursByDay || {});
-    var [holidays,setHolidays] = React.useState(monthState.holidays || {});
+    var [holidays,setHolidays] = React.useState(monthState.holidays || {}); // bool map
+    var [holidayNames,setHolidayNames] = React.useState(monthState.holidayNames || {}); // name map
     var [longDay,setLongDay] = React.useState(typeof monthState.longDay==='number' ? monthState.longDay : 0);
     var [notesByDay,setNotesByDay] = React.useState(monthState.notesByDay || {});
 
     React.useEffect(function(){
       var next = {}; for (var k in store) next[k]=store[k];
-      next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, notesByDay:notesByDay };
+      next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, holidayNames:holidayNames, notesByDay:notesByDay };
       setStore(next);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch(e){}
-    }, [ym, hoursByDay, holidays, longDay, notesByDay]);
+      document.body.classList.toggle('compact', !!compact);
+    }, [ym, hoursByDay, holidays, longDay, holidayNames, notesByDay, compact]);
 
     var totalDays = daysInMonth(year, month);
     function buildRows(){
@@ -113,7 +120,6 @@
       return out.map(function(r){ return [r[0],r[1],r[2],r[3],r[4]]; });
     }
     var rows = React.useMemo(buildRows, [year,month,totalDays]);
-
     var workingDays = React.useMemo(function(){ return rows.reduce(function(a,r){ return a + r.filter(Boolean).length; },0); }, [rows]);
     var targetMonthlyHours = workingDays*DAILY_TARGET;
     var actualMonthlyHours = React.useMemo(function(){
@@ -123,49 +129,112 @@
     var pct = targetMonthlyHours>0 ? (actualMonthlyHours/targetMonthlyHours)*100 : 0;
     var monthLabel = React.useMemo(function(){ return new Date(year,month,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }, [year,month]);
 
-    var enteredDayList = React.useMemo(function(){
+    // Weekly summaries
+    var weekly = useMemo(function(){
+      var out=[];
+      rows.forEach(function(r, i){
+        var days = r.filter(Boolean);
+        var sum = days.reduce(function(s,d){ return s + (Number(hoursByDay[d])||0); }, 0);
+        var target = days.length * DAILY_TARGET;
+        out.push({week:i+1, actual:sum, target:target, avg: days.length? sum/days.length : 0});
+      });
+      return out;
+    }, [rows, hoursByDay]);
+
+    // Rolling average (5-day) & cumulative
+    var enteredDayList = useMemo(function(){
       var arr=[]; rows.forEach(function(r){ r.forEach(function(d){ if(d) arr.push(d); }); }); return arr;
     }, [rows]);
-    var enteredDaysCount = enteredDayList.length;
-    var avgPerEntered = enteredDaysCount? (actualMonthlyHours/enteredDaysCount) : 0;
-    var remainingWorking = workingDays - enteredDaysCount;
-    var forecastTotal = actualMonthlyHours + avgPerEntered * remainingWorking;
-    var forecastDiff = forecastTotal - targetMonthlyHours;
-
-    var weekdaySums = [0,0,0,0,0], weekdayCounts=[0,0,0,0,0];
-    enteredDayList.forEach(function(d){
-      var wd = new Date(year,month,d).getDay();
-      var idx = wd===0?0:wd;
-      var val = Number(hoursByDay[d])||0;
-      weekdaySums[idx]+=val; weekdayCounts[idx]+=1;
-    });
-    var weekdayAvgs = weekdaySums.map(function(s,i){ return weekdayCounts[i]? (s/weekdayCounts[i]) : 0; });
-
     var cumulative = [];
     var cum=0, targetCum=0, cIdx=0;
-    rows.forEach(function(r){
-      r.forEach(function(d){
-        if(!d) return;
-        cIdx++;
-        var val = Number(hoursByDay[d])||0;
-        cum += val;
-        targetCum += DAILY_TARGET;
-        cumulative.push({x:cIdx, a:cum, t:targetCum});
-      });
+    var roll = []; // last 5 days
+    enteredDayList.forEach(function(d){
+      cIdx++;
+      var val = Number(hoursByDay[d])||0;
+      cum += val; targetCum += DAILY_TARGET;
+      roll.push(val); if(roll.length>5) roll.shift();
+      var avg = roll.length? (roll.reduce(function(a,b){return a+b;},0)/roll.length) : 0;
+      cumulative.push({x:cIdx, a:cum, t:targetCum, avg:avg});
     });
 
+    // Overtime tracker
+    var overtimeTotal = useMemo(function(){
+      var s=0; Object.keys(hoursByDay).forEach(function(k){ var v=Number(hoursByDay[k])||0; s+= Math.max(0, v-DAILY_TARGET); }); return s;
+    }, [hoursByDay]);
+
+    // Goal projection: given X hours per remaining working day -> when reach target?
+    var enteredDaysCount = enteredDayList.filter(function(d){ return hoursByDay[d]!=null; }).length;
+    var remainingWorking = workingDays - enteredDaysCount;
+    function reachDateFor(xPerDay){
+      if (actualMonthlyHours >= targetMonthlyHours) return 'Reached';
+      var need = targetMonthlyHours - actualMonthlyHours;
+      if (xPerDay<=0) return '—';
+      var daysNeeded = Math.ceil(need / xPerDay);
+      // Compute date by scanning forward over working days in current month
+      var count=0, d=new Date(year,month,1);
+      for (var day=1; day<=totalDays; day++){
+        var wd = new Date(year,month,day).getDay();
+        if (isWeekendIndex(wd)) continue;
+        // skip days that already have entries
+        if (hoursByDay[day]==null) { count++; if (count>=daysNeeded) return new Date(year,month,day).toLocaleDateString(); }
+      }
+      return 'Next month';
+    }
+
+    // AI-ish assistant (expanded)
+    function answerQuery(q){
+      q = (q||'').toLowerCase();
+      if(q.includes('overtime')) return 'Overtime this month: ' + fmt(Math.max(0,diff)) + ' h (day-level overtime total: '+fmt(overtimeTotal)+' h)';
+      if(q.includes('short') || q.includes('deficit')) return 'Shortage this month: ' + fmt(Math.max(0,-diff)) + ' h';
+      if(q.includes('total')) return 'Total actual hours: ' + fmt(actualMonthlyHours) + ' h';
+      if(q.includes('target')) return 'Target hours this month: ' + fmt(targetMonthlyHours) + ' h';
+      if(q.includes('forecast') || q.includes('predict')) {
+        // Predictive mode: last 10 working days average for remaining
+        var lastVals=[];
+        for (var i=enteredDayList.length-1;i>=0 && lastVals.length<10;i--){
+          var v = Number(hoursByDay[enteredDayList[i]])||0; lastVals.push(v);
+        }
+        var avg = lastVals.length? lastVals.reduce(function(a,b){return a+b;},0)/lastVals.length : 0;
+        var proj = actualMonthlyHours + avg * remainingWorking;
+        var pdiff = proj - targetMonthlyHours;
+        return 'Predictive forecast: ' + fmt(proj) + ' h (' + (pdiff>=0?'exceed':'shortage') + ' ' + fmt(Math.abs(pdiff)) + ' h)';
+      }
+      if(q.includes('remaining')) return 'Remaining working days (no entry yet): ' + remainingWorking;
+      if(q.includes('best') && q.includes('weekday')){
+        var bestIdx=-1, best= -1;
+        var sums=[0,0,0,0,0], counts=[0,0,0,0,0];
+        enteredDayList.forEach(function(d){
+          var wd = new Date(year,month,d).getDay(); var idx = wd===0?0:wd; var v=Number(hoursByDay[d])||0;
+          sums[idx]+=v; counts[idx]+=1;
+        });
+        for (var i=0;i<5;i++){ var a = counts[i]? sums[i]/counts[i] : 0; if(a>best){best=a; bestIdx=i;} }
+        return bestIdx>=0 ? ('Best weekday so far: '+WEEKDAYS[bestIdx]+' ('+fmt(best)+' h avg)') : 'Not enough data yet.';
+      }
+      return 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?", "remaining?", "best weekday?"';
+    }
+
     function setHoliday(d){
-      setHolidays(function(prev){
+      var name = holidayNames[d];
+      // toggle
+      var nowOn = !holidays[d];
+      setHolidays(function(prev){ var n={}; for (var k in prev) n[k]=prev[k]; if(prev[d]) delete n[d]; else n[d]=true; return n; });
+      setHolidayNames(function(prev){
         var n={}; for (var k in prev) n[k]=prev[k];
-        if(n[d]) delete n[d]; else n[d]=true;
+        if (nowOn){
+          var newName = (name && name.trim()) || prompt('Holiday name (optional)', name||'');
+          if (newName) n[d]=newName;
+        } else {
+          delete n[d];
+        }
         return n;
       });
       setHoursByDay(function(prev){
         var n={}; for (var k in prev) n[k]=prev[k];
-        if(!holidays[d]) n[d] = DAILY_TARGET;
+        if(nowOn) n[d] = DAILY_TARGET;
         return n;
       });
     }
+
     function fillAll(){
       var next={}; for (var k in hoursByDay) next[k]=hoursByDay[k];
       rows.forEach(function(row){
@@ -180,21 +249,40 @@
     function clearAll(){ setHoursByDay({}); }
 
     function exportCSV(){
-      var lines = ["day,weekday,hours,holiday"];
+      var lines = ["day,weekday,hours,holiday,name"];
       for (var d=1; d<=daysInMonth(year,month); d++){
         var wd = new Date(year,month,d).getDay(); if (isWeekendIndex(wd)) continue;
         var wk = WEEKDAYS[wd];
         var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
         var hol = holidays[d] ? 'yes' : '';
-        lines.push(d + "," + wk + "," + v + "," + hol);
+        var nm = holidayNames[d] || '';
+        lines.push(d + "," + wk + "," + v + "," + hol + "," + nm);
       }
       var blob = new Blob([lines.join(String.fromCharCode(10))], { type:'text/csv;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a'); a.href = url; a.download = "timesheet_" + ymKey(year,month) + ".csv";
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
+    function exportExcelXLS(){
+      // Basic HTML table export opened by Excel (works as .xls/.xlsx in most cases)
+      var monthName = new Date(year,month,1).toLocaleDateString(undefined,{month:'long', year:'numeric'});
+      var html = '<table border="1"><tr><th>Day</th><th>Weekday</th><th>Hours</th><th>Holiday</th><th>Name</th></tr>';
+      for (var d=1; d<=daysInMonth(year,month); d++){
+        var wd = new Date(year,month,d).getDay(); if (isWeekendIndex(wd)) continue;
+        var wk = WEEKDAYS[wd];
+        var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : Number(v).toFixed(2);
+        var hol = holidays[d] ? 'Yes' : '';
+        var nm = holidayNames[d] || '';
+        html += '<tr><td>'+d+'</td><td>'+wk+'</td><td>'+v+'</td><td>'+hol+'</td><td>'+nm+'</td></tr>';
+      }
+      html += '</table>';
+      var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href=url; a.download='timesheet_'+ymKey(year,month)+'.xls';
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
     function exportJSON(){
-      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.8.3-react-umd' };
+      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.9-react-umd' };
       var blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a'); a.href = url; a.download = "timesheet_backup_" + ymKey(year,month) + ".json";
@@ -208,42 +296,39 @@
       for (var d=1; d<=daysInMonth(year,month); d++){
         var wd = new Date(year,month,d).getDay(); if (isWeekendIndex(wd)) continue;
         var wk = WEEKDAYS[wd]; var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
-        rowsHtml += '<tr><td>'+wk+' '+d+'</td><td>'+(v!==''?Number(v).toFixed(2):'')+'</td><td>'+(holidays[d]?'Holiday':'')+'</td></tr>';
+        rowsHtml += '<tr><td>'+wk+' '+d+'</td><td>'+(v!==''?Number(v).toFixed(2):'')+'</td><td>'+(holidays[d]?(holidayNames[d]||'Holiday'):'')+'</td></tr>';
       }
       var summary = '<table><thead><tr><th>Metric</th><th>Value (h)</th></tr></thead><tbody>'
         + '<tr><td>Daily target</td><td>'+ (DAILY_TARGET).toFixed(2) +'</td></tr>'
         + '<tr><td>Target hours</td><td>'+ (targetMonthlyHours).toFixed(2) +'</td></tr>'
         + '<tr><td>Actual hours</td><td>'+ (actualMonthlyHours).toFixed(2) +'</td></tr>'
         + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) +'</td></tr>'
+        + '<tr><td>Overtime total</td><td>'+ (overtimeTotal).toFixed(2) +'</td></tr>'
         + '</tbody></table>';
       var printScript = '<scr'+'ipt>window.onload=()=>window.print()<\/scr'+'ipt>';
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>TimeSheet Report</title><style>'+style+'</style></head>'
         + '<body><h1>TimeSheet — '+monthName+'</h1>'+summary
-        + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th><th>Note</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+        + '<h2>Daily entries (Sun–Thu)</h2><table><thead><tr><th>Day</th><th>Hours</th><th>Holiday</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
         + printScript + '</body></html>';
       w.document.open(); w.document.write(html); w.document.close();
     }
 
-    function monthJumpOptions(){
-      var arr = [], now = new Date();
-      for (var k=-24;k<12;k++){
-        var dt = new Date(now.getFullYear(), now.getMonth()+k, 1);
-        var val = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
-        arr.push({value: val, label: dt.toLocaleDateString(undefined,{month:'long',year:'numeric'})});
+    // Keyboard shortcuts: F fill, C clear, H toggle holiday today
+    useEffect(function(){
+      function onKey(e){
+        if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')) return;
+        var k = e.key.toLowerCase();
+        if (k==='f'){ fillAll(); }
+        if (k==='c'){ clearAll(); }
+        if (k==='h'){
+          var td = new Date().getDate();
+          var tm = new Date().getMonth(), ty = new Date().getFullYear();
+          if (tm===month && ty===year && td){ setHoliday(td); }
+        }
       }
-      return arr;
-    }
-    var jumpOptions = React.useMemo(monthJumpOptions, []);
-
-    function answerQuery(q){
-      q = (q||'').toLowerCase();
-      if(q.indexOf('overtime')>=0 || q.indexOf('exceed')>=0) return 'Overtime this month: ' + fmt(Math.max(0,diff)) + ' h';
-      if(q.indexOf('short')>=0 || q.indexOf('deficit')>=0) return 'Shortage this month: ' + fmt(Math.max(0,-diff)) + ' h';
-      if(q.indexOf('total')>=0) return 'Total actual hours: ' + fmt(actualMonthlyHours) + ' h';
-      if(q.indexOf('target')>=0) return 'Target hours this month: ' + fmt(targetMonthlyHours) + ' h';
-      if(q.indexOf('forecast')>=0 || q.indexOf('predict')>=0) return 'Projected end-of-month: ' + fmt(forecastTotal) + ' h (' + (forecastDiff>=0?'exceed':'shortage') + ' ' + fmt(Math.abs(forecastDiff)) + ' h)';
-      return 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?"';
-    }
+      window.addEventListener('keydown', onKey);
+      return function(){ window.removeEventListener('keydown', onKey); };
+    }, [year, month, holidays, holidayNames, hoursByDay]);
 
     // UI
     return h('div', {className:'min-h-screen w-full'},
@@ -263,7 +348,7 @@
             h('button', {onClick:function(){setYear(function(y){return y+1;});}, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Year »'),
             h('label', {className:'text-sm ml-2'}, 'Jump',
               h('select', {value:ym, onChange:function(e){ var parts=e.target.value.split('-'); setYear(Number(parts[0])); setMonth(Number(parts[1])-1); }, className:'ml-2 rounded-lg border px-2 py-1 bg-white'},
-                jumpOptions.map(function(opt,i){ return h('option', {key:i, value:opt.value}, opt.label); })
+                (function(){ var arr=[]; var now=new Date(); for (var k=-24;k<12;k++){ var dt=new Date(now.getFullYear(), now.getMonth()+k, 1); var val=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); arr.push(h('option',{key:k,value:val}, dt.toLocaleDateString(undefined,{month:'long',year:'numeric'}))); } return arr; })()
               )
             ),
             h('label', {className:'text-sm ml-2'}, 'Long day',
@@ -272,7 +357,11 @@
               ),
               h('span', {className:'ml-2 chip'}, '9.5h')
             ),
-            h('button', {onClick:function(){ var n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Reset')
+            h('button', {onClick:function(){ var n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Reset'),
+            h('label', {className:'text-sm ml-2 flex items-center gap-2'},
+              h('input', {type:'checkbox', checked:compact, onChange:function(e){ setCompact(e.target.checked); }}),
+              'Compact mode'
+            )
           )
         ),
 
@@ -282,10 +371,12 @@
           h('button', {onClick:clearAll, className:'px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300'}, 'Clear all'),
           h('button', {onClick:exportCSV, className:'px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700'}, 'Export CSV'),
           h('button', {onClick:exportPDF, className:'px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700'}, 'Export PDF'),
-          h('button', {onClick:exportJSON, className:'px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90'}, 'Backup JSON')
+          h('button', {onClick:exportExcelXLS, className:'px-3 py-2 rounded-xl bg-emerald-700 text-white hover:opacity-90'}, 'Export Excel'),
+          h('button', {onClick:exportJSON, className:'px-3 py-2 rounded-xl bg-slate-700 text-white hover:opacity-90'}, 'Backup JSON'),
+          h('span', {className:'text-xs text-gray-500 ml-2'}, 'Shortcuts: ', h('span',{className:'kbd'},'F'), ' Fill · ', h('span',{className:'kbd'},'C'), ' Clear · ', h('span',{className:'kbd'},'H'), ' Toggle today holiday')
         ),
 
-        // Summary
+        // Summary cards + progress
         h('div', {className:'grid lg:grid-cols-3 gap-3 mb-4 items-stretch'},
           h('div', {className:'bg-white rounded-xl p-3'},
             h('div', {className:'text-sm text-gray-600'}, 'Target hours'),
@@ -295,23 +386,36 @@
           h('div', {className:'bg-white rounded-xl p-3'},
             h('div', {className:'text-sm text-gray-600'}, 'Actual hours'),
             h('div', {className:'text-xl font-bold'}, fmt(actualMonthlyHours)),
-            h('div', {className:'text-xs text-gray-500 mt-1'}, 'Completion: ', fmt(pct), '%')
+            h('div', {className:'text-xs text-gray-500 mt-1'}, 'Overtime total: ', fmt(overtimeTotal), ' h')
           ),
           h('div', {className:'rounded-xl p-3 bg-white flex items-center gap-3'},
             h('div', {className:'shrink-0'}, h(ProgressRing, {actual:actualMonthlyHours, target:targetMonthlyHours})),
             h('div', null,
               h('div', {className:'text-sm font-semibold'}, diff>=0? 'Exceed by':'Shortage of'),
-              h('div', {className:'text-xl font-bold'}, fmt(Math.abs(diff)), ' h'),
-              h('div', {className:'text-xs opacity-80 mt-1'}, 'Forecast: ', fmt(forecastTotal), ' h (', (forecastDiff>=0?'exceed':'shortage'), ' ', fmt(Math.abs(forecastDiff)), ' h)')
+              h('div', {className:'text-xl font-bold'}, fmt(Math.abs(diff)), ' h')
             )
           )
         ),
 
-        // Grid (Daily entries)
+        // Weekly summary cards
+        h('div', {className:'grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4'},
+          weekly.map(function(w){ 
+            return h('div',{key:w.week, className:'bg-white rounded-xl p-3'},
+              h('div',{className:'text-xs text-gray-500 mb-1'}, 'Week ', w.week),
+              h('div', null,
+                h('div',{className:'text-sm'}, 'Actual: ', h('b',null,fmt(w.actual)), ' h'),
+                h('div',{className:'text-sm'}, 'Target: ', h('b',null,fmt(w.target)), ' h'),
+                h('div',{className:'text-xs text-gray-500 mt-1'}, 'Avg/day: ', fmt(w.avg))
+              )
+            );
+          })
+        ),
+
+        // Daily grid
         h('div', {className:'bg-white rounded-2xl shadow p-4'},
           h('div', {className:'flex items-center justify-between mb-3'},
             h('h3', {className:'font-semibold'}, 'Daily entries (Sun–Thu)'),
-            h('div', {className:'text-xs text-gray-500'}, 'Toggle H = holiday (sets ', fmt(DAILY_TARGET), 'h). Long day shows 9.5h.')
+            h('div', {className:'text-xs text-gray-500'}, 'H = holiday (sets ', fmt(DAILY_TARGET), 'h). Long day shows 9.5h.')
           ),
           h('div', {className:'grid gap-3'},
             rows.map(function(row, ri){
@@ -333,8 +437,9 @@
                         h('div', {className:'flex items-center justify-between mb-2'},
                           h('span', {className:'text-xs text-gray-500'}, WEEKDAYS[j], ' ', dayNum),
                           h('div', {className:'flex items-center gap-1'},
+                            holiday && holidayNames[dayNum] ? h('span',{className:'chip', title:'Holiday name'}, holidayNames[dayNum]) : null,
                             isLongCol ? h('span', {className:'chip', title:'Long day'}, '9.5h') : null,
-                            h('button', {title:'Toggle holiday', className:'text-[10px] px-1.5 py-0.5 rounded '+(holiday?'bg-amber-200 text-amber-900':'bg-gray-100'),
+                            h('button', {title:'Toggle holiday / set name', className:'text-[10px] px-1.5 py-0.5 rounded '+(holiday?'bg-amber-200 text-amber-900':'bg-gray-100'),
                               onClick:function(){ setHoliday(dayNum); }}, 'H')
                           )
                         ),
@@ -357,36 +462,61 @@
           )
         ),
 
-        // Moved below Daily entries: charts & heatmap
+        // Advanced charts
         h('div', {className:'bg-white rounded-2xl shadow p-4 mt-4 mb-4'},
-          h('h3', {className:'font-semibold mb-2'}, 'Cumulative vs Target'),
-          h(LineChart, {data:cumulative})
+          h('h3', {className:'font-semibold mb-2'}, 'Weekly Target vs Actual (stacked)'),
+          h(WeeklyStackedBar, {weeks: weekly})
         ),
         h('div', {className:'bg-white rounded-2xl shadow p-4 mb-4'},
-          h('h3', {className:'font-semibold mb-2'}, 'Heatmap — Daily hours (Sun–Thu)'),
-          h(Heatmap, {days: enteredDayList, getVal: function(d){ var v=hoursByDay[d]; return v==null? null : Number(v); }})
+          h('h3', {className:'font-semibold mb-2'}, 'Cumulative vs Target (with 5-day rolling average)'),
+          h(LineChart, {data:cumulative})
         ),
 
-        // AI + Insights (unchanged)
-        h('div', {className:'grid lg:grid-cols-2 gap-4 mt-4'},
-          h('div', {className:'bg-white rounded-2xl shadow p-4'},
+        // Heatmap
+        (function HeatmapComp(){
+          var days = enteredDayList, getVal = function(d){ var v=hoursByDay[d]; return v==null? null : Number(v); };
+          var cols = 7, cell=16, gap=4, pad=6;
+          var rowsHM = Math.ceil(days.length/cols);
+          var w = cols*cell + (cols-1)*gap + pad*2;
+          var hgt = rowsHM*cell + (rowsHM-1)*gap + pad*2;
+          function color(v){ if(v==null) return '#e5e7eb'; var p=Math.max(0,Math.min(1,v/8)); var g=Math.round(255*(1-p)), r=Math.round(255*(1-p*0.2)); return 'rgb('+r+','+g+','+200+')'; }
+          var rects=[]; for (var i=0;i<days.length;i++){ var d=days[i]; var row=Math.floor(i/cols), col=i%cols; rects.push(h('rect',{key:i,x:pad+col*(cell+gap),y:pad+row*(cell+gap),width:cell,height:cell,rx:3,ry:3, fill:color(getVal(d))})); }
+          return h('div',{className:'bg-white rounded-2xl shadow p-4 mb-4'}, [
+            h('h3',{key:'h',className:'font-semibold mb-2'},'Heatmap — Daily hours (Sun–Thu)'),
+            h('svg',{key:'s',viewBox:'0 0 '+w+' '+hgt, className:'w-full h-[120px]'}, rects)
+          ]);
+        })(),
+
+        // AI + Insights + Goal Projection
+        h('div', {className:'grid lg:grid-cols-3 gap-4 mt-4'},
+          h('div', {className:'bg-white rounded-2xl shadow p-4 lg:col-span-1'},
             h('h3', {className:'font-semibold mb-2'}, 'AI Q&A (local)'),
-            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?"'),
+            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?", "remaining?", "best weekday?"'),
             h('input', {id:'qa', className:'rounded border px-2 py-1 w-full mb-2', placeholder:'Ask a question...',
               onKeyDown:function(e){ if(e.key==='Enter'){ var ans = answerQuery(e.target.value); var el = document.getElementById('qa_out'); if(el) el.textContent = ans; } } }),
             h('div', {id:'qa_out', className:'text-sm bg-gray-50 rounded p-2 min-h-[36px]'})
           ),
-          h('div', {className:'bg-white rounded-2xl shadow p-4'},
-            h('h3', {className:'font-semibold mb-2'}, 'Insights'),
-            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Monthly summary: You worked ', fmt(actualMonthlyHours), 'h out of ', fmt(targetMonthlyHours), 'h. Forecast indicates ', (forecastDiff>=0?'exceed':'shortage'), ' by ', fmt(Math.abs(forecastDiff)), 'h.'),
-            h('div', {className:'text-xs text-gray-500'}, 'Productivity by weekday (avg h): ',
-              WEEKDAYS.slice(0,5).map(function(wk,i){ return h('span', {key:i, className:'mr-2'}, wk, ': ', fmt(weekdayAvgs[i]||0)); })
+          h('div', {className:'bg-white rounded-2xl shadow p-4 lg:col-span-2'},
+            h('h3', {className:'font-semibold mb-2'}, 'Insights & Projection'),
+            h('div', {className:'text-xs text-gray-500 mb-2'}, 'You worked ', fmt(actualMonthlyHours), 'h out of ', fmt(targetMonthlyHours), 'h.'),
+            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Overtime (sum over 8h days): ', fmt(overtimeTotal), 'h.'),
+            h('div', {className:'text-xs text-gray-500 mb-3'}, '5-day rolling avg helps visualize momentum in the cumulative chart.'),
+            h('div', {className:'flex flex-wrap items-end gap-3'},
+              h('label', {className:'text-sm'}, 'If I work (h/day)',
+                h('input', {type:'number', step:'0.25', min:'0', defaultValue:'8', id:'projX', className:'ml-2 rounded border px-2 py-1 w-24'})
+              ),
+              h('button', {className:'px-2 py-1 rounded bg-gray-200', onClick:function(){
+                var el = document.getElementById('projX'); var x = Number(el && el.value || 0);
+                var ans = reachDateFor(x);
+                var out = document.getElementById('proj_out'); if(out) out.textContent = 'Reach target by: ' + ans;
+              }}, 'Project'),
+              h('div', {id:'proj_out', className:'text-sm text-gray-700'})
             )
           )
         ),
 
         // Footer + mobile totals
-        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'Developed By: i3bdel3ziz ❤️'),
+        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'V1.9 (React UMD) · Fri+Sat weekend · Daily target 8h · Weekly summaries · Stacked bars · Rolling avg · Editable holidays · Overtime · Compact mode · Shortcuts'),
         h('div', {id:'totalsBar', className:'sm:hidden mt-3'},
           h('div', {className:'text-xs'}, 'Target: ', h('b', null, fmt(targetMonthlyHours)), 'h'),
           h('div', {className:'text-xs'}, 'Actual: ', h('b', null, fmt(actualMonthlyHours)), 'h'),
