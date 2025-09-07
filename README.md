@@ -1,4 +1,4 @@
-# ⏱️ ORA — V1.9 (React UMD bundle)
+# ⏱️ ORA — V1.9 
 
 **ORA** is a lightweight time-tracking and hours management app designed for Sun–Thu working weeks (Fri+Sat weekend). It helps you manage daily entries, track shortages/exceeding hours, and visualize your month with smart insights.
 
