@@ -78,9 +78,6 @@
 
 ---
 
-
----
-
 ## 🚀 Usage
 
 Open directly via GitHub Pages:  
