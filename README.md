@@ -21,7 +21,6 @@
 - Keyboard shortcuts (F/C/H)  
 - Exports: CSV, Excel, PDF, JSON  
 
----
 
 ### **V1.8**
 📊 *Bringing intelligence & visuals*  
@@ -32,7 +31,6 @@
 - Monthly summary + forecast  
 - In-app alerts for low progress (removed in 1.8.3 for clarity)  
 
----
 
 ### **V1.7**
 🛠️ *Projections & automation*  
@@ -43,7 +41,6 @@
 - Data restore/import (JSON backup)  
 - Mobile sticky totals bar  
 
----
 
 ### **V1.6 and below**
 🏗️ *Core functionality built*  
