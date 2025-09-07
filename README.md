@@ -1,4 +1,4 @@
-# ⏱️ ORA — V1.9 
+# ⏱️ ORA ![Made with Love](https://img.shields.io/badge/made%20with-❤️-red.svg)
 
 ![Version](https://img.shields.io/badge/version-1.9-blue.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
