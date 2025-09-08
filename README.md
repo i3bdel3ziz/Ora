@@ -66,8 +66,7 @@
 
 ## 🚀 Usage
 
-Open directly via GitHub Pages:  
-👉 [ORA on GitHub Pages](https://i3bdel3ziz.github.io/Ora/)
+Open directly via GitHub Pages: 👉 [ORA on GitHub Pages](https://i3bdel3ziz.github.io/Ora/)
 
 Data is stored **locally in your browser** (no server required).
 
