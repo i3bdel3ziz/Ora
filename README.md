@@ -19,6 +19,17 @@
 ## 📌 Release Timeline
 
 
+## New in 1.9.1 — (Current)**
+📆 *Leave balances panel (year-based)*
+  - Annual leave: **30 workdays** + **carry‑in (up to 10)** — configurable per year.
+  - Sick leave total: **10 workdays** across both types.
+  - Sick leave without medical certificate: **max 3 workdays** (subset of total 10).
+  - Auto-calculates **used year-to-date** by scanning all months saved for the selected year.
+  - Displays **remaining balances** live.
+  - Daily leave tagging (tracking + optional auto-hours) Per day: cycle **None → Annual → Sick (MC) → Sick (No MC)**.
+  - Toggle **“Leave sets 8h”** in the header to automatically set **8h** for any day marked as leave.
+  - CSV/Excel/PDF exports include **leave type** and **holiday name**.
+
 ### **V1.9 — (Current)**
 ✨ *Smarter insights & AI boost*  
 - Weekly summary cards (totals + averages)  
