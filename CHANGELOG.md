@@ -1,8 +1,4 @@
-## 1.9 (Preview)
-- Added weekly summary cards.
-- Added editable holiday names (persist + export).
-- Added weekly stacked bar + rolling-average line on cumulative chart.
-- Added goal projection calculator.
-- Added overtime tracker.
-- Expanded AI Q&A intents (remaining, best weekday, predictive forecast).
-- Added compact mode and keyboard shortcuts.
+## 1.9.1 Leave Toggle Fix
+- Makes the **Leave Balances** panel and **Leave sets 8h** toggle clearly visible.
+- Adds an explicit version query string to `app.bundle.js` in `index.html`.
+- Includes a compact daily grid to validate the toggle behavior quickly.
