@@ -1,13 +1,28 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <!-- ORA V1.9.1 (Leave Toggle Fix) — Developed by i3bdel3ziz -->
+  <!-- ORA V1.9.1 (Full UI + Leave Toggle) — Developed by i3bdel3ziz -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ORA — TimeSheet</title>
   <link rel="icon" href="favicon.ico" />
-  <meta name="description" content="ORA: Monthly hours tracker with leave tracking and auto 8h leave toggle." />
+  <meta name="description" content="ORA: Monthly hours tracker with holidays, leave tracking (auto 8h), exports, charts, insights." />
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media (max-width: 640px){
+      #totalsBar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#111;color:#fff;padding:.5rem .75rem;display:flex;gap:.75rem;justify-content:space-between;align-items:center}
+      body{padding-bottom:58px;}
+      .compact .p-4{padding:0.75rem}
+      .compact .p-3{padding:0.5rem}
+      .compact .p-2{padding:0.25rem}
+      .compact .rounded-2xl{border-radius:0.5rem}
+      .compact input,.compact select,.compact button{padding:.25rem .5rem;font-size:.85rem}
+    }
+    .cell-today{outline:2px solid #4f46e5; outline-offset: 0; border-radius: .75rem;}
+    .chip{font-size:10px;padding:.125rem .375rem;border-radius:.375rem;background:#eef2ff;color:#3730a3}
+    .kbd{background:#111;color:#fff;border-radius:4px;padding:0 .3rem;font-size:.75rem}
+    .badge{font-size:10px;padding:.125rem .375rem;border-radius:.375rem}
+  </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
   <div id="root"></div>
@@ -17,6 +32,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
   <!-- Precompiled, no JSX -->
-  <script src="app.bundle.js?v=1.9.1-fix"></script>
+  <script src="app.bundle.js?v=1.9.1-full"></script>
 </body>
 </html>
