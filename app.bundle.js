@@ -4,7 +4,7 @@
   var h = React.createElement;
   var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
 
-  var STORAGE_KEY = 'ora-react-umd-1.9.1';
+  var STORAGE_KEY = 'ora-react-umd-1.9.2';
   var WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var DAILY_TARGET = 8;
 
@@ -87,28 +87,20 @@
   }
 
   function App(){
-    var _titleInit='ORA', _logoInit='';
-    try { _titleInit = localStorage.getItem('wl_title') || 'ORA'; } catch(e){}
-    try { _logoInit = localStorage.getItem('wl_logo') || ''; } catch(e){}
-
     var today = new Date();
-    var [appTitle,setAppTitle] = useState(_titleInit);
-    var [logoUrl,setLogoUrl] = useState(_logoInit);
     var [year,setYear] = useState(today.getFullYear());
     var [month,setMonth] = useState(today.getMonth());
-    var [compact,setCompact] = useState(false);
 
     var storeInit = {}; try { var raw = localStorage.getItem(STORAGE_KEY); storeInit = raw? JSON.parse(raw) : {}; } catch(e){ storeInit={}; }
     if(!storeInit.meta) storeInit.meta = { annualCarry:{}, autoLeave8:true };
     if(storeInit.meta.autoLeave8===undefined) storeInit.meta.autoLeave8 = true;
     var [store,setStore] = useState(storeInit);
+
     var ym = ymKey(year, month);
-    var monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0, holidayNames:{}, notesByDay:{}, leavesByDay:{} };
+    var monthState = store[ym] || { hoursByDay:{}, holidays:{}, longDay:0, leavesByDay:{} };
     var [hoursByDay,setHoursByDay] = useState(monthState.hoursByDay || {});
-    var [holidays,setHolidays] = useState(monthState.holidays || {}); // bool map
-    var [holidayNames,setHolidayNames] = useState(monthState.holidayNames || {}); // name map
+    var [holidays,setHolidays] = useState(monthState.holidays || {}); // bool map (no names now)
     var [longDay,setLongDay] = useState(typeof monthState.longDay==='number' ? monthState.longDay : 0);
-    var [notesByDay,setNotesByDay] = useState(monthState.notesByDay || {});
     var [leavesByDay,setLeavesByDay] = useState(monthState.leavesByDay || {});
     var annualCarryInit = (store.meta && store.meta.annualCarry && (store.meta.annualCarry[String(year)] || 0)) || 0;
     var [annualCarry,setAnnualCarry] = useState(annualCarryInit);
@@ -117,13 +109,12 @@
     useEffect(function(){
       var next = {}; for (var k in store) next[k]=store[k];
       if(!next.meta) next.meta = { annualCarry:{}, autoLeave8:autoLeave8 };
-      next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, holidayNames:holidayNames, notesByDay:notesByDay, leavesByDay:leavesByDay };
+      next[ym] = { hoursByDay:hoursByDay, holidays:holidays, longDay:longDay, leavesByDay:leavesByDay };
       next.meta.annualCarry[String(year)] = Number(annualCarry)||0;
       next.meta.autoLeave8 = !!autoLeave8;
       setStore(next);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch(e){}
-      document.body.classList.toggle('compact', !!compact);
-    }, [ym, hoursByDay, holidays, longDay, holidayNames, notesByDay, leavesByDay, compact, annualCarry, autoLeave8]);
+    }, [ym, hoursByDay, holidays, longDay, leavesByDay, annualCarry, autoLeave8]);
 
     var totalDays = daysInMonth(year, month);
     function buildRows(){
@@ -154,20 +145,18 @@
       var out=[];
       rows.forEach(function(r, i){
         var days = r.filter(Boolean);
-        var sum = days.reduce(function(s,d){ return s + (Number(hoursByDay[d])||0); }, 0);
+        var sum = days.reduce(function(s,d){ return s + (d ? (Number(hoursByDay[d])||0) : 0); }, 0);
         var target = days.length * DAILY_TARGET;
         out.push({week:i+1, actual:sum, target:target, avg: days.length? sum/days.length : 0});
       });
       return out;
     }, [rows, hoursByDay]);
 
-    // Rolling average (5-day) & cumulative
+    // Rolling cumulative + avg
     var enteredDayList = useMemo(function(){
       var arr=[]; rows.forEach(function(r){ r.forEach(function(d){ if(d) arr.push(d); }); }); return arr;
     }, [rows]);
-    var cumulative = [];
-    var cum=0, targetCum=0, cIdx=0;
-    var roll = []; // last 5 days
+    var cumulative = []; var cum=0, targetCum=0, cIdx=0; var roll=[];
     enteredDayList.forEach(function(d){
       cIdx++;
       var val = Number(hoursByDay[d])||0;
@@ -177,12 +166,12 @@
       cumulative.push({x:cIdx, a:cum, t:targetCum, avg:avg});
     });
 
-    // Overtime tracker
+    // Overtime
     var overtimeTotal = useMemo(function(){
       var s=0; Object.keys(hoursByDay).forEach(function(k){ var v=Number(hoursByDay[k])||0; s+= Math.max(0, v-DAILY_TARGET); }); return s;
     }, [hoursByDay]);
 
-    // Year-wide leave usage: scan store for the same year
+    // Year leave usage (no holiday names anymore)
     function computeYearLeaveUsage(y){
       var usedAL=0, usedSLM=0, usedSLN=0;
       for (var key in store){
@@ -203,7 +192,7 @@
     }
     var leaveYTD = computeYearLeaveUsage(year);
 
-    // Balances & rules
+    // Balances
     var annualEntitlement = 30 + (Number(annualCarry)||0);
     var annualUsed = leaveYTD.usedAL;
     var annualRemaining = Math.max(0, annualEntitlement - annualUsed);
@@ -215,23 +204,8 @@
 
     // Actions
     function setHoliday(d){
-      var name = holidayNames[d];
-      // toggle
-      var nowOn = !holidays[d];
       setHolidays(function(prev){ var n={}; for (var k in prev) n[k]=prev[k]; if(prev[d]) delete n[d]; else n[d]=true; return n; });
-      setHolidayNames(function(prev){
-        var n={}; for (var k in prev) n[k]=prev[k];
-        if (nowOn){
-          var newName = (name && name.trim()) || prompt('Holiday name (optional)', name||'');
-          if (newName) n[d]=newName;
-        } else {
-          delete n[d];
-        }
-        return n;
-      });
-      // holidays do not auto-set hours here; independent from leave rule
     }
-
     function cycleLeave(d){
       var cur = leavesByDay[d] || LEAVE_NONE;
       var next = LEAVE_NONE;
@@ -244,7 +218,6 @@
         setHoursByDay(function(prev){ var n={}; for (var k in prev) n[k]=prev[k]; n[d]=DAILY_TARGET; return n; });
       }
     }
-
     function fillAll(){
       var next={}; for (var k in hoursByDay) next[k]=hoursByDay[k];
       rows.forEach(function(row){
@@ -252,23 +225,42 @@
           if(!d) return;
           var base = (j===longDay)? 9.5 : DAILY_TARGET;
           next[d] = holidays[d] ? DAILY_TARGET : base;
-          if(leavesByDay[d] && autoLeave8) next[d] = DAILY_TARGET; // leave overrides to 8h when toggle on
+          if(leavesByDay[d] && autoLeave8) next[d] = DAILY_TARGET;
         });
       });
       setHoursByDay(next);
     }
-    function clearAll(){ setHoursByDay({}); }
+    function clearAll(){
+      // 1) Clear all hours for this month
+      setHoursByDay({});
+      // 2) Clear all holidays & leaves for this month
+      setHolidays({});
+      setLeavesByDay({});
+      // 3) Reset YEAR leave balances by removing leaves for ALL months in the current year
+      setStore(function(prev){
+        var next={}; for (var k in prev) next[k]=prev[k];
+        for (var key in next){
+          if(!/^\d{4}-\d{2}$/.test(key)) continue;
+          var parts = key.split('-'); var yy = Number(parts[0]);
+          if (yy!==year) continue;
+          var ms = next[key] || {};
+          ms.leavesByDay = {}; // wipe leaves
+          next[key] = ms;
+        }
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch(e){}
+        return next;
+      });
+    }
 
     function exportCSV(){
-      var lines = ["day,weekday,hours,holiday,holiday_name,leave"];
+      var lines = ["day,weekday,hours,holiday,leave"];
       for (var d=1; d<=daysInMonth(year,month); d++){
         var wd = new Date(year,month,d).getDay(); if (isWeekendIndex(wd)) continue;
         var wk = WEEKDAYS[wd];
         var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
         var hol = holidays[d] ? 'yes' : '';
-        var nm = holidayNames[d] || '';
         var lv = leavesByDay[d] || '';
-        lines.push(d + "," + wk + "," + v + "," + hol + "," + nm + "," + lv);
+        lines.push(d + "," + wk + "," + v + "," + hol + "," + lv);
       }
       var blob = new Blob([lines.join(String.fromCharCode(10))], { type:'text/csv;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
@@ -276,15 +268,14 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function exportExcelXLS(){
-      var html = '<table border=\"1\"><tr><th>Day</th><th>Weekday</th><th>Hours</th><th>Holiday</th><th>Holiday name</th><th>Leave</th></tr>';
+      var html = '<table border=\"1\"><tr><th>Day</th><th>Weekday</th><th>Hours</th><th>Holiday</th><th>Leave</th></tr>';
       for (var d=1; d<=daysInMonth(year,month); d++){
         var wd = new Date(year,month,d).getDay(); if (isWeekendIndex(wd)) continue;
         var wk = WEEKDAYS[wd];
         var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : Number(v).toFixed(2);
         var hol = holidays[d] ? 'Yes' : '';
-        var nm = holidayNames[d] || '';
         var lv = leavesByDay[d] || '';
-        html += '<tr><td>'+d+'</td><td>'+wk+'</td><td>'+v+'</td><td>'+hol+'</td><td>'+nm+'</td><td>'+lv+'</td></tr>';
+        html += '<tr><td>'+d+'</td><td>'+wk+'</td><td>'+v+'</td><td>'+hol+'</td><td>'+lv+'</td></tr>';
       }
       html += '</table>';
       var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
@@ -293,7 +284,7 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function exportJSON(){
-      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.9.1-react-umd' };
+      var payload = { store: store, exportedAt: new Date().toISOString(), version: '1.9.2' };
       var blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json;charset=utf-8;' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a'); a.href = url; a.download = "ora_backup_" + ymKey(year,month) + ".json";
@@ -302,15 +293,15 @@
     function exportPDF(){
       var w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700'); if(!w) return;
       var style = 'body{font-family:sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px;text-align:right}th:first-child,td:first-child{text-align:left}.muted{color:#666}';
-      var monthName = new Date(year,month,1).toLocaleDateString(undefined,{month:'long', year:'numeric'});
       var rowsHtml = '';
       for (var d=1; d<=daysInMonth(year,month); d++){
         var wd = new Date(year,month,d).getDay(); if (isWeekendIndex(wd)) continue;
         var wk = WEEKDAYS[wd]; var v = hoursByDay[d]; v = (v===undefined || v===null)? '' : v;
-        var hol = holidays[d] ? (holidayNames[d]||'Holiday') : '';
+        var hol = holidays[d] ? 'Holiday' : '';
         var lv = leavesByDay[d] ? leaveLabel(leavesByDay[d]) : '';
         rowsHtml += '<tr><td>'+wk+' '+d+'</td><td>'+(v!==''?Number(v).toFixed(2):'')+'</td><td>'+hol+'</td><td>'+lv+'</td></tr>';
       }
+      var monthName = new Date(year,month,1).toLocaleDateString(undefined,{month:'long', year:'numeric'});
       var summary = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>'
         + '<tr><td>Daily target</td><td>'+ (DAILY_TARGET).toFixed(2) + ' h</td></tr>'
         + '<tr><td>Target hours</td><td>'+ (workingDays*DAILY_TARGET).toFixed(2) + ' h</td></tr>'
@@ -318,11 +309,33 @@
         + '<tr><td>'+(diff>=0?'Exceed':'Shortage')+'</td><td>'+ Math.abs(diff).toFixed(2) + ' h</td></tr>'
         + '</tbody></table>';
 
+      var usage = (function(){
+        var usedAL=0, usedSLM=0, usedSLN=0;
+        for (var key in store){
+          if(!/^\d{4}-\d{2}$/.test(key)) continue;
+          var parts = key.split('-'); var yy = Number(parts[0]);
+          if (yy!==year) continue;
+          var ms = store[key];
+          if(ms && ms.leavesByDay){
+            for(var k in ms.leavesByDay){
+              var code = ms.leavesByDay[k];
+              if(code===LEAVE_AL) usedAL++; else if(code===LEAVE_SLM) usedSLM++; else if(code===LEAVE_SLN) usedSLN++;
+            }
+          }
+        }
+        return {usedAL:usedAL, usedSLM:usedSLM, usedSLN:usedSLN};
+      })();
+      var annualEntitlement = 30 + (Number(annualCarry)||0);
+      var annualRemaining = Math.max(0, annualEntitlement - usage.usedAL);
+      var sickTotalEnt = 10;
+      var sickRemainingTotal = Math.max(0, sickTotalEnt - (usage.usedSLM + usage.usedSLN));
+      var sickNoMCRemaining = Math.max(0, 3 - usage.usedSLN);
+
       var leaveSummary = '<table style=\"margin-top:16px\"><thead><tr><th>Leave</th><th>Used</th><th>Remaining</th></tr></thead><tbody>'
-        + '<tr><td>Annual (30 + carry-in '+(Number(annualCarry)||0)+')</td><td>'+ (annualUsed) +'</td><td>'+ (annualRemaining) +'</td></tr>'
-        + '<tr><td>Sick (MC)</td><td>'+ (leaveYTD.usedSLM) +'</td><td class=\"muted\">—</td></tr>'
-        + '<tr><td>Sick (No MC) (max 3)</td><td>'+ (leaveYTD.usedSLN) +'</td><td>'+ (sickNoMCRemaining) +'</td></tr>'
-        + '<tr><td>Sick Total (max 10)</td><td>'+ (sickUsedTotal) +'</td><td>'+ (sickRemainingTotal) +'</td></tr>'
+        + '<tr><td>Annual (30 + carry-in '+(Number(annualCarry)||0)+')</td><td>'+ (usage.usedAL) +'</td><td>'+ (annualRemaining) +'</td></tr>'
+        + '<tr><td>Sick (MC)</td><td>'+ (usage.usedSLM) +'</td><td class=\"muted\">—</td></tr>'
+        + '<tr><td>Sick (No MC) (max 3)</td><td>'+ (usage.usedSLN) +'</td><td>'+ (sickNoMCRemaining) +'</td></tr>'
+        + '<tr><td>Sick Total (max 10)</td><td>'+ (usage.usedSLM + usage.usedSLN) +'</td><td>'+ (sickRemainingTotal) +'</td></tr>'
         + '</tbody></table>';
 
       var printScript = '<scr'+'ipt>window.onload=()=>window.print()<\\/scr'+'ipt>';
@@ -333,54 +346,6 @@
       w.document.open(); w.document.write(html); w.document.close();
     }
 
-    // Simple Q&A (local heuristics)
-    function answerQuery(q){
-      q = String(q||'').toLowerCase().trim();
-      if(!q) return 'Type a question like "overtime?", "shortage?", "total?", "target?", "forecast?".';
-      if(q.includes('overtime')) return 'Overtime (sum above 8h days): '+fmt(overtimeTotal)+'h';
-      if(q.includes('shortage')) return (diff<0? 'Shortage: ':'No shortage. Exceed: ') + fmt(Math.abs(diff)) + 'h';
-      if(q.includes('total')) return 'Actual total: '+fmt(actualMonthlyHours)+'h';
-      if(q.includes('target')) return 'Target total: '+fmt(targetMonthlyHours)+'h';
-      if(q.includes('forecast') || q.includes('remaining')){
-        var blanks=0; rows.forEach(function(r){ r.forEach(function(d){ if(d && (hoursByDay[d]==null)) blanks++; }); });
-        var need = Math.max(0, targetMonthlyHours - actualMonthlyHours);
-        var per = blanks? need/blanks : 0;
-        return 'Need '+fmt(need)+'h more ('+fmt(per)+'h/day on '+blanks+' blank days).';
-      }
-      if(q.includes('best') && q.includes('weekday')){
-        var sums=[0,0,0,0,0], counts=[0,0,0,0,0];
-        rows.forEach(function(r){ r.forEach(function(d,j){ if(d && hoursByDay[d]!=null){ sums[j]+=Number(hoursByDay[d])||0; counts[j]++; } }); });
-        var best=0, bestAvg=-1; for(var i=0;i<5;i++){ var avg=counts[i]?sums[i]/counts[i]:0; if(avg>bestAvg){bestAvg=avg; best=i;} }
-        return 'Best weekday so far: '+WEEKDAYS[best]+' ('+fmt(bestAvg)+'h avg)';
-      }
-      return 'I can answer: overtime, shortage, total, target, forecast, remaining, best weekday.';
-    }
-    function reachDateFor(x){
-      x = Number(x)||0;
-      var blanks=[]; rows.forEach(function(r){ r.forEach(function(d){ if(d && (hoursByDay[d]==null)) blanks.push(d); }); });
-      var need = Math.max(0, targetMonthlyHours - actualMonthlyHours);
-      var accum=0, reach='Not this month';
-      for(var i=0;i<blanks.length;i++){ accum += x; if(accum>=need){ reach = WEEKDAYS[new Date(year,month,blanks[i]).getDay()]+' '+blanks[i]; break; } }
-      return reach;
-    }
-
-    // Keyboard shortcuts: F fill, C clear, H toggle holiday today
-    useEffect(function(){
-      function onKey(e){
-        if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')) return;
-        var k = e.key.toLowerCase();
-        if (k==='f'){ fillAll(); }
-        if (k==='c'){ clearAll(); }
-        if (k==='h'){
-          var td = new Date().getDate();
-          var tm = new Date().getMonth(), ty = new Date().getFullYear();
-          if (tm===month && ty===year && td){ setHoliday(td); }
-        }
-      }
-      window.addEventListener('keydown', onKey);
-      return function(){ window.removeEventListener('keydown', onKey); };
-    }, [year, month, holidays, holidayNames, hoursByDay]);
-
     // UI
     return h('div', {className:'min-h-screen w-full'},
       h('div', {className:'max-w-7xl mx-auto p-6'},
@@ -388,30 +353,19 @@
         // Header
         h('header', {className:'mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between'},
           h('div', {className:'flex items-center gap-2'},
-            logoUrl ? h('img', {src:logoUrl, alt:'', className:'w-8 h-8 object-contain rounded hidden sm:block'}) : null,
-            h('input', {value:appTitle, onChange:function(e){setAppTitle(e.target.value);}, className:'text-2xl font-bold bg-transparent w-[320px]'})
+            h('h1', {className:'text-2xl font-bold'}, 'ORA — ', monthLabel, ' (V1.9.2)')
           ),
           h('div', {className:'flex flex-wrap gap-2 items-center'},
             h('button', {onClick:function(){setYear(function(y){return y-1;});}, className:'px-2 py-1 rounded-lg bg-gray-200'}, '« Year'),
             h('button', {onClick:function(){ var m=month-1; if(m<0){setMonth(11); setYear(function(y){return y-1;});} else setMonth(m); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, '◀'),
-            h('h1', {className:'text-xl font-semibold min-w-[180px] text-center'}, monthLabel),
+            h('h2', {className:'text-xl font-semibold min-w-[180px] text-center'}, monthLabel),
             h('button', {onClick:function(){ var m=month+1; if(m>11){setMonth(0); setYear(function(y){return y+1;});} else setMonth(m); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, '▶'),
             h('button', {onClick:function(){setYear(function(y){return y+1;});}, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Year »'),
-            h('label', {className:'text-sm ml-2'}, 'Jump',
-              h('select', {value:ym, onChange:function(e){ var parts=e.target.value.split('-'); setYear(Number(parts[0])); setMonth(Number(parts[1])-1); }, className:'ml-2 rounded-lg border px-2 py-1 bg-white'},
-                (function(){ var arr=[]; var now=new Date(); for (var k=-24;k<12;k++){ var dt=new Date(now.getFullYear(), now.getMonth()+k, 1); var val=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); arr.push(h('option',{key:k,value:val}, dt.toLocaleDateString(undefined,{month:'long',year:'numeric'}))); } return arr; })()
-              )
-            ),
             h('label', {className:'text-sm ml-2'}, 'Long day',
               h('select', {value:String(longDay), onChange:function(e){ setLongDay(Number(e.target.value)); }, className:'ml-2 rounded-lg border px-2 py-1 bg-white'},
                 [0,1,2,3,4].map(function(i){ return h('option', {key:i, value:String(i)}, WEEKDAYS[i]); })
               ),
               h('span', {className:'ml-2 chip'}, '9.5h')
-            ),
-            h('button', {onClick:function(){ var n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth()); }, className:'px-2 py-1 rounded-lg bg-gray-200'}, 'Reset'),
-            h('label', {className:'text-sm ml-2 flex items-center gap-2'},
-              h('input', {type:'checkbox', checked:compact, onChange:function(e){ setCompact(e.target.checked); }}),
-              'Compact mode'
             ),
             h('label', {className:'text-sm ml-2 flex items-center gap-2'},
               h('input', {type:'checkbox', checked:!!autoLeave8, onChange:function(e){ setAutoLeave8(e.target.checked); }}),
@@ -432,46 +386,50 @@
         ),
 
         // Leave balances panel
-        h('div', {className:'grid md:grid-cols-2 gap-3 mb-4'},
-          h('div', {className:'bg-white rounded-xl p-3'},
-            h('div', {className:'flex items-center justify-between mb-2'},
-              h('h3',{className:'font-semibold'}, 'Leave Balances — ', year),
-              h('label', {className:'text-xs flex items-center gap-2'},
-                'Annual carry-in (max 10)',
-                h('input', {type:'number', min:'0', max:'10', step:'1', value:String(annualCarry),
-                  onChange:function(e){ var v=Math.max(0,Math.min(10, Number(e.target.value)||0)); setAnnualCarry(v); },
-                  className:'w-16 rounded border px-2 py-1'})
+        (function(){
+          var annualUsed = leaveYTD.usedAL;
+          var annualEntitlement2 = 30 + (Number(annualCarry)||0);
+          var annualRemaining2 = Math.max(0, annualEntitlement2 - annualUsed);
+          return h('div', {className:'grid md:grid-cols-2 gap-3 mb-4'},
+            h('div', {className:'bg-white rounded-xl p-3'},
+              h('div', {className:'flex items-center justify-between mb-2'},
+                h('h3',{className:'font-semibold'}, 'Leave Balances — ', year),
+                h('label', {className:'text-xs flex items-center gap-2'},
+                  'Annual carry-in (max 10)',
+                  h('input', {type:'number', min:'0', max:'10', step:'1', value:String(annualCarry),
+                    onChange:function(e){ var v=Math.max(0,Math.min(10, Number(e.target.value)||0)); setAnnualCarry(v); },
+                    className:'w-16 rounded border px-2 py-1'})
+                )
+              ),
+              h('div', {className:'grid sm:grid-cols-3 gap-2 text-sm'},
+                h('div', {className:'bg-indigo-50 rounded p-2'},
+                  h('div', {className:'text-gray-600'}, 'Annual'),
+                  h('div', {className:'text-lg font-bold'}, annualUsed, ' / ', annualEntitlement2),
+                  h('div', {className:'text-xs text-gray-500'}, 'Remaining: ', annualRemaining2)
+                ),
+                h('div', {className:'bg-emerald-50 rounded p-2'},
+                  h('div', {className:'text-gray-600'}, 'Sick (total 10)'),
+                  h('div', {className:'text-lg font-bold'}, sickUsedTotal, ' / 10'),
+                  h('div', {className:'text-xs text-gray-500'}, 'Remaining: ', sickRemainingTotal)
+                ),
+                h('div', {className:'bg-amber-50 rounded p-2'},
+                  h('div', {className:'text-gray-600'}, 'Sick (No MC max 3)'),
+                  h('div', {className:'text-lg font-bold'}, leaveYTD.usedSLN, ' / 3'),
+                  h('div', {className:'text-xs text-gray-500'}, 'Remaining: ', sickNoMCRemaining)
+                )
               )
             ),
-            h('div', {className:'grid sm:grid-cols-3 gap-2 text-sm'},
-              h('div', {className:'bg-indigo-50 rounded p-2'},
-                h('div', {className:'text-gray-600'}, 'Annual'),
-                h('div', {className:'text-lg font-bold'}, annualUsed, ' / ', annualEntitlement),
-                h('div', {className:'text-xs text-gray-500'}, 'Remaining: ', annualRemaining)
-              ),
-              h('div', {className:'bg-emerald-50 rounded p-2'},
-                h('div', {className:'text-gray-600'}, 'Sick (total 10)'),
-                h('div', {className:'text-lg font-bold'}, sickUsedTotal, ' / 10'),
-                h('div', {className:'text-xs text-gray-500'}, 'Remaining: ', sickRemainingTotal)
-              ),
-              h('div', {className:'bg-amber-50 rounded p-2'},
-                h('div', {className:'text-gray-600'}, 'Sick (No MC max 3)'),
-                h('div', {className:'text-lg font-bold'}, leaveYTD.usedSLN, ' / 3'),
-                h('div', {className:'text-xs text-gray-500'}, 'Remaining: ', sickNoMCRemaining)
+            h('div', {className:'bg-white rounded-xl p-3'},
+              h('div', {className:'text-sm text-gray-600 mb-1'}, 'How to use'),
+              h('ul', {className:'list-disc pl-5 text-sm text-gray-700 space-y-1'},
+                h('li', null, 'Click ', h('span',{className:'kbd'},'H'), ' to toggle a holiday.'),
+                h('li', null, 'Click ', h('span',{className:'chip'},'Leave'), ' to cycle: Annual → Sick (MC) → Sick (No MC) → None.'),
+                h('li', null, 'Toggle "', h('b',null,'Leave sets 8h'), '" in the header to auto-set daily hours to 8 when a leave is applied.'),
+                h('li', null, '“Clear all” also resets this YEAR’s leave balances (wipes leave marks across all months of the year).')
               )
-            ),
-            (sickNoMCRemaining===0 && leaveYTD.usedSLN>0) ? h('div',{className:'text-xs text-amber-700 mt-2'},'Note: You have reached the limit for Sick (No MC).') : null
-          ),
-          h('div', {className:'bg-white rounded-xl p-3'},
-            h('div', {className:'text-sm text-gray-600 mb-1'}, 'How to use'),
-            h('ul', {className:'list-disc pl-5 text-sm text-gray-700 space-y-1'},
-              h('li', null, 'Click ', h('span',{className:'badge',style:{background:'#e5e7eb'}},'H'), ' to toggle a holiday (sets name optionally).'),
-              h('li', null, 'Click ', h('span',{className:'badge',style:{background:'#fef9c3'}},'Leave'), ' to cycle: None → Annual → Sick (MC) → Sick (No MC).'),
-              h('li', null, 'Toggle "', h('b',null,'Leave sets 8h'), '" in the header to auto-set daily hours to 8 when a leave is applied.'),
-              h('li', null, 'Exports include leave type and holiday name.')
             )
-          )
-        ),
+          );
+        })(),
 
         // Summary cards + progress
         h('div', {className:'grid lg:grid-cols-3 gap-3 mb-4 items-stretch'},
@@ -512,7 +470,7 @@
         h('div', {className:'bg-white rounded-2xl shadow p-4'},
           h('div', {className:'flex items-center justify-between mb-3'},
             h('h3', {className:'font-semibold'}, 'Daily entries (Sun–Thu)'),
-            h('div', {className:'text-xs text-gray-500'}, 'H = holiday (optional name). Leave button cycles AL / Sick(MC) / Sick(No MC).')
+            h('div', {className:'text-xs text-gray-500'}, 'H = holiday. Leave button cycles AL / Sick(MC) / Sick(No MC).')
           ),
           h('div', {className:'grid gap-3'},
             rows.map(function(row, ri){
@@ -535,10 +493,10 @@
                         h('div', {className:'flex items-center justify-between mb-2'},
                           h('span', {className:'text-xs text-gray-500'}, WEEKDAYS[j], ' ', dayNum),
                           h('div', {className:'flex items-center gap-1'},
-                            holiday && holidayNames[dayNum] ? h('span',{className:'chip', title:'Holiday name'}, holidayNames[dayNum]) : null,
+                            holiday ? h('span',{className:'chip', title:'Holiday'}, 'Holiday') : null,
                             leave ? h('span', {className:'chip', title:'Leave'}, leaveLabel(leave)) : null,
                             isLongCol ? h('span', {className:'chip', title:'Long day'}, '9.5h') : null,
-                            h('button', {title:'Toggle holiday / set name', className:'text-[10px] px-1.5 py-0.5 rounded '+(holiday?'bg-amber-200 text-amber-900':'bg-gray-100'),
+                            h('button', {title:'Toggle holiday', className:'text-[10px] px-1.5 py-0.5 rounded '+(holiday?'bg-amber-200 text-amber-900':'bg-gray-100'),
                               onClick:function(){ setHoliday(dayNum); }}, 'H'),
                             h('button', {title:'Cycle leave type', className:'text-[10px] px-1.5 py-0.5 rounded bg-yellow-100',
                               onClick:function(){ cycleLeave(dayNum); }}, 'Leave')
@@ -572,8 +530,6 @@
           h('h3', {className:'font-semibold mb-2'}, 'Cumulative vs Target (with 5-day rolling average)'),
           h(LineChart, {data:cumulative})
         ),
-
-        // Heatmap
         (function HeatmapComp(){
           var days = enteredDayList, getVal = function(d){ var v=hoursByDay[d]; return v==null? null : Number(v); };
           var cols = 7, cell=16, gap=4, pad=6;
@@ -588,36 +544,7 @@
           ]);
         })(),
 
-        // AI + Insights + Goal Projection
-        h('div', {className:'grid lg:grid-cols-3 gap-4 mt-4'},
-          h('div', {className:'bg-white rounded-2xl shadow p-4 lg:col-span-1'},
-            h('h3', {className:'font-semibold mb-2'}, 'AI Q&A (local)'),
-            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Try: "overtime?", "shortage?", "total?", "target?", "forecast?", "remaining?", "best weekday?"'),
-            h('input', {id:'qa', className:'rounded border px-2 py-1 w-full mb-2', placeholder:'Ask a question...',
-              onKeyDown:function(e){ if(e.key==='Enter'){ var ans = answerQuery(e.target.value); var el = document.getElementById('qa_out'); if(el) el.textContent = ans; } } }),
-            h('div', {id:'qa_out', className:'text-sm bg-gray-50 rounded p-2 min-h-[36px]'})
-          ),
-          h('div', {className:'bg-white rounded-2xl shadow p-4 lg:col-span-2'},
-            h('h3', {className:'font-semibold mb-2'}, 'Insights & Projection'),
-            h('div', {className:'text-xs text-gray-500 mb-2'}, 'You worked ', fmt(actualMonthlyHours), 'h out of ', fmt(targetMonthlyHours), 'h.'),
-            h('div', {className:'text-xs text-gray-500 mb-2'}, 'Overtime (sum over 8h days): ', fmt(overtimeTotal), 'h.'),
-            h('div', {className:'text-xs text-gray-500 mb-3'}, '5-day rolling avg helps visualize momentum in the cumulative chart.'),
-            h('div', {className:'flex flex-wrap items-end gap-3'},
-              h('label', {className:'text-sm'}, 'If I work (h/day)',
-                h('input', {type:'number', step:'0.25', min:'0', defaultValue:'8', id:'projX', className:'ml-2 rounded border px-2 py-1 w-24'})
-              ),
-              h('button', {className:'px-2 py-1 rounded bg-gray-200', onClick:function(){
-                var el = document.getElementById('projX'); var x = Number(el && el.value || 0);
-                var ans = reachDateFor(x);
-                var out = document.getElementById('proj_out'); if(out) out.textContent = 'Reach target by: ' + ans;
-              }}, 'Project'),
-              h('div', {id:'proj_out', className:'text-sm text-gray-700'})
-            )
-          )
-        ),
-
-        // Footer + mobile totals
-        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'ORA V1.9.1 (React UMD) · Fri+Sat weekend · Daily target 8h · Weekly summaries · Stacked bars · Rolling avg · Editable holidays · Leave tracking (toggle sets 8h) · Overtime · Compact mode · Shortcuts'),
+        h('footer', {className:'text-xs text-gray-500 mt-6 text-center'}, 'ORA V1.9.2 · Fri+Sat weekend · Daily target 8h · Leave tracking (toggle sets 8h) · Clear all resets YEAR leave · Charts/Exports'),
         h('div', {id:'totalsBar', className:'sm:hidden mt-3'},
           h('div', {className:'text-xs'}, 'Target: ', h('b', null, fmt(targetMonthlyHours)), 'h'),
           h('div', {className:'text-xs'}, 'Actual: ', h('b', null, fmt(actualMonthlyHours)), 'h'),

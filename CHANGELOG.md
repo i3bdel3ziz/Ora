@@ -1,4 +1,4 @@
-## 1.9.1 Leave Toggle Fix
-- Makes the **Leave Balances** panel and **Leave sets 8h** toggle clearly visible.
-- Adds an explicit version query string to `app.bundle.js` in `index.html`.
-- Includes a compact daily grid to validate the toggle behavior quickly.
+## 1.9.2
+- Clear All resets year-to-date leave (removes leavesByDay for all months in the current year).
+- Removed holiday name input/UI and export columns; holidays are now unlabelled booleans.
+- Kept leave toggle (auto 8h), stacked bars, cumulative with rolling avg, heatmap, exports.
